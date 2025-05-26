@@ -1,0 +1,110 @@
+<!-- Core/Controls/HistoryCardControl.xaml -->
+<UserControl x:Class="AIChatHelper.Core.Controls.HistoryCardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             mc:Ignorable="d"
+             d:DesignHeight="120" d:DesignWidth="300"
+             Margin="5,5,5,8"
+             HorizontalAlignment="Stretch">
+
+    <!-- MaterialDesignのカードスタイルを使用 -->
+    <materialDesign:Card Padding="0"
+                         UniformCornerRadius="4"
+                         BorderThickness="1"
+                         BorderBrush="{DynamicResource MaterialDesign.Brush.Primary.Light}"
+                         Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
+                         Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+                         HorizontalAlignment="Stretch">
+
+        <!-- カードのコンテンツ -->
+        <Grid HorizontalAlignment="Stretch">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- ヘッダー部分（日時表示） -->
+            <materialDesign:ColorZone Grid.Row="0"
+                                     Mode="PrimaryMid"
+                                     Padding="8,2"
+                                     HorizontalAlignment="Stretch">
+                <Grid HorizontalAlignment="Stretch">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 日時表示 -->
+                    <TextBlock x:Name="HeaderText"
+                               Grid.Column="0"
+                               Text="{Binding CreatedAt, StringFormat={}{0:yyyy/MM/dd HH:mm:ss}}"
+                               VerticalAlignment="Center"
+                               FontWeight="Regular"/>
+
+                    <!-- 展開ボタン -->
+                    <Button x:Name="ExpandButton"
+                            Grid.Column="1"
+                            Style="{StaticResource MaterialDesignIconForegroundButton}"
+                            Width="24"
+                            Height="24"
+                            Background="{DynamicResource MaterialDesign.Brush.Primary.Dark}"
+                            Foreground="{DynamicResource MaterialDesign.Brush.Primary.Foreground}"
+                            Padding="4"
+                            Margin="0,0,0,0"
+                            Click="ExpandButton_Click">
+                        <materialDesign:PackIcon Kind="ChevronDown" Width="16" Height="16"/>
+                    </Button>
+                </Grid>
+            </materialDesign:ColorZone>
+
+            <!-- コンテンツ部分（履歴内容） - 背景色を変更して視認性を向上 -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource MaterialDesign.Brush.Background.Level2}"
+                    BorderThickness="1,0,1,1"
+                    BorderBrush="{DynamicResource MaterialDesign.Brush.Divider}"
+                    HorizontalAlignment="Stretch">
+
+                <!-- 通常表示モード - テキストブロックをボーダーで囲む -->
+                <Border Margin="6,6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource MaterialDesign.Brush.Divider}"
+                        Background="{DynamicResource MaterialDesign.Brush.Background.Level1}"
+                        CornerRadius="2"
+                        HorizontalAlignment="Stretch">
+                    <Grid HorizontalAlignment="Stretch">
+                        <!-- 通常表示モード -->
+                        <TextBlock x:Name="ContentPreview"
+                                   Margin="8,6"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding Text}"
+                                   MaxHeight="80"
+                                   HorizontalAlignment="Stretch"
+                                   MouseLeftButtonDown="Content_MouseLeftButtonDown"
+                                   Visibility="Visible"
+                                   TextTrimming="CharacterEllipsis"/>
+
+                        <!-- 拡張表示モード -->
+                        <ScrollViewer x:Name="ExpandedContentScroll"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      MaxHeight="300"
+                                      Visibility="Collapsed"
+                                      HorizontalAlignment="Stretch">
+                            <TextBox x:Name="ExpandedContent"
+                                     BorderThickness="0"
+                                     Margin="8,6"
+                                     Text="{Binding Text}"
+                                     TextWrapping="Wrap"
+                                     IsReadOnly="True"
+                                     Background="Transparent"
+                                     HorizontalAlignment="Stretch"/>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Border>
+        </Grid>
+    </materialDesign:Card>
+</UserControl>

@@ -1,0 +1,64 @@
+<Window x:Class="AIChatHelper.Views.HistoryManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:AIChatHelper.ViewModels"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Style="{StaticResource MaterialDesignWindow}"
+        TextElement.Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+        Background="{DynamicResource MaterialDesign.Brush.Background}"
+        Title="履歴管理" Height="450" Width="600"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://siteoforigin:,,,/Assets/app.ico">
+
+  <!-- DataContext はコードビハインドで設定するのでここでは省略 -->
+
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- 履歴一覧 -->
+    <DataGrid x:Name="HistoryDataGrid"
+            Grid.Row="0"
+            AutoGenerateColumns="False"
+            SelectionMode="Single"
+            ItemsSource="{Binding HistoryItems}"
+            SelectedItem="{Binding SelectedHistoryItem, Mode=TwoWay}"
+            IsReadOnly="True"
+            CanUserAddRows="False"
+            CanUserDeleteRows="False"
+            HeadersVisibility="Column">
+        <DataGrid.Columns>
+            <DataGridTextColumn Header="保存日時"
+                                Binding="{Binding CreatedAt, StringFormat={}{0:yyyy/MM/dd HH:mm:ss}}"
+                                Width="180"/>
+            <DataGridTextColumn Header="テキスト"
+                                Binding="{Binding Text}"
+                                Width="*"/>
+        </DataGrid.Columns>
+    </DataGrid>
+
+    <!-- ボタン群 -->
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Margin="0,10,0,0">
+      <Button Content="削除"
+              Width="80"
+              Margin="0,0,8,0"
+              Style="{StaticResource MaterialDesignPaperButton}"
+              Command="{Binding DeleteHistoryCommand}" />
+      <Button Content="全削除"
+              Width="80"
+              Margin="0,0,8,0"
+              Style="{StaticResource MaterialDesignPaperButton}"
+              Command="{Binding ClearAllHistoriesCommand}" />
+      <Button Content="閉じる"
+              Width="80"
+              Style="{StaticResource MaterialDesignPaperButton}"
+              Command="{Binding CloseWindowCommand}"
+              CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+    </StackPanel>
+  </Grid>
+</Window>

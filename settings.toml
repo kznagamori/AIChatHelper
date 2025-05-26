@@ -1,0 +1,36 @@
+[[ChatSites]]
+Name = "ChatGPT"
+Url = "https://chat.openai.com/"
+
+[[ChatSites]]
+Name = "Gemini"
+Url = "https://gemini.google.com/app?hl=ja"
+
+[[ChatSites]]
+Name = "Claude"
+Url = "https://claude.ai/new"
+
+[[ChatSites]]
+Name = "Copilot"
+Url = "https://copilot.microsoft.com/"
+
+[Config]
+# テキスト入力欄の検索条件（優先度が上の順に並べる）
+InputSelectors = [
+	'[contenteditable="true"][role="textbox"]',
+	'[contenteditable="true"]',
+	'textarea.w-full.resize-none',
+	'#copilot-chat-textarea',
+	'textarea',
+]
+
+
+[Config.EditorSettings]
+ConfirmTemplateOverwrite = false
+ConfirmHistoryOverwrite = false
+# TextEditor がクリア状態になった時にテンプレートテキストを挿入するかどうか
+InsertTemplateTextOnClear = false
+# 挿入するテンプレートテキスト
+TemplateTextForEditor = """
+
+"""

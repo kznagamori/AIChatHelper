@@ -1,0 +1,72 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/AIChatHelper.csproj",
+				"/property:GenerateFullPaths=true",
+				"/consoleloggerparameters:NoSummary;ForceNoAlign"
+			],
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "publish",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"publish",
+				"${workspaceFolder}/AIChatHelper.csproj",
+				"/property:GenerateFullPaths=true",
+				"/consoleloggerparameters:NoSummary;ForceNoAlign"
+			],
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "clean-thorough",
+			"type": "shell",
+			"command": "if (Test-Path \"${workspaceFolder}\\bin\") { Remove-Item -Recurse -Force \"${workspaceFolder}\\bin\" }; if (Test-Path \"${workspaceFolder}\\obj\") { Remove-Item -Recurse -Force \"${workspaceFolder}\\obj\" }",
+			"problemMatcher": []
+		},
+		{
+			"label": "publish-release",
+			"dependsOn": "clean-thorough",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"publish",
+				"${workspaceFolder}/AIChatHelper.csproj",
+				"-c",
+				"Release",
+				"-r",
+				"win-x64",
+				"-p:PublishSingleFile=true",
+				"-p:SelfContained=true",
+				"-p:PublishTrimmed=false",
+				"-p:DebugType=None",
+				"/property:GenerateFullPaths=true",
+				"/consoleloggerparameters:NoSummary;ForceNoAlign"
+			],
+			"problemMatcher": "$msCompile",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
+			"label": "watch",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"watch",
+				"run",
+				"--project",
+				"${workspaceFolder}/AIChatHelper.csproj"
+			],
+			"problemMatcher": "$msCompile"
+		}
+	]
+}

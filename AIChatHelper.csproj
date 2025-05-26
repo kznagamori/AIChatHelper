@@ -1,0 +1,87 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- 各種バージョン情報の指定 -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <Version>1.0.0</Version>
+    <!-- 追加のアプリケーション情報 -->
+    <Product>AIChatHelper</Product>
+    <Description>AI チャットサービスのためのヘルパーアプリケーション</Description>
+    <Company>kznagamori</Company>
+    <Authors>kznagamori</Authors>
+    <Copyright>Copyright © 2025 kznagamori</Copyright>
+    <NeutralLanguage>ja-JP</NeutralLanguage>
+    <PackageProjectUrl>https://github.com/kznagamori/AIChatHelper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/kznagamori/AIChatHelper.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- ビルドの高速化 -->
+    <XamlPrecompile>true</XamlPrecompile>
+    <Deterministic>true</Deterministic>
+    <!-- アプリケーションアイコンの指定 -->
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <Win32Icon>Assets/app.ico</Win32Icon>
+  </PropertyGroup>
+
+  <!-- アセンブリ情報の追加 -->
+  <ItemGroup>
+    <AssemblyMetadata Include="PackageProjectUrl"   Value="$(PackageProjectUrl)" />
+    <AssemblyMetadata Include="RepositoryUrl"       Value="$(RepositoryUrl)" />
+  </ItemGroup>
+
+  <!-- XAML変更時に自動ビルド -->
+  <ItemGroup>
+    <Watch Include="**/*.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="[8.4.0,)" />
+    <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="[9.0.0,)" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3179.45" />
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="[1.1.135,)" />
+    <PackageReference Include="Samboy063.Tomlet" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- settings.toml をビルド出力およびパブリッシュ先にコピー -->
+    <None Include="settings.toml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+    <!-- Asset images -->
+    <None Include="Assets\**\*.*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+    <!-- template フォルダごと出力先にコピー -->
+    <None Include="template\**\*.*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+    <!-- Licensesフォルダごと出力先にコピー -->
+    <None Include="Licenses\**\*.*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+    <!-- Licenseファイルを出力先にコピー -->
+    <None Include="LICENSE">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+    <!-- README.mdファイルを出力先にコピー -->
+    <None Include="README.md">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+</Project>
+<!-- Build Command="dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true -p:PublishTrimmed=false -p:DebugType=None" -->

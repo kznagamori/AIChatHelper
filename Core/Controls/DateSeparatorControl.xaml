@@ -1,0 +1,34 @@
+<!-- Core/Controls/DateSeparatorControl.xaml -->
+<UserControl x:Class="AIChatHelper.Core.Controls.DateSeparatorControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             HorizontalAlignment="Stretch"
+             d:DesignHeight="30" d:DesignWidth="300">
+    <Grid Margin="4,8" HorizontalAlignment="Stretch">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- 日付表示 -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource MaterialDesign.Brush.Primary.Dark}"
+                CornerRadius="12"
+                Padding="8,2">
+            <TextBlock x:Name="DateText"
+                      Foreground="{DynamicResource MaterialDesign.Brush.Primary.Foreground}"
+                      FontWeight="Medium"
+                      VerticalAlignment="Center"
+                      Padding="4,0"/>
+        </Border>
+
+        <!-- 区切り線 -->
+        <Separator Grid.Column="1"
+                   Margin="8,0,0,0"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Stretch"/>
+    </Grid>
+</UserControl>
