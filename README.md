@@ -1,0 +1,2 @@
+# AIChatHelper
+AIChatHelperは、複数のAIチャットサービス（ChatGPT、Claude、Geminiなど）を一つのアプリケーションから簡単に利用できるWPFデスクトップアプリケーション
