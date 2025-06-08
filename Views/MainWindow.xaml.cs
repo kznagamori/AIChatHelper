@@ -111,7 +111,23 @@ public partial class MainWindow : Window
 	private void TabControlMain_PreviewKeyDown(object sender, KeyEventArgs e)
 	{
 		// タブコントロール内でのCtrl+Homeが押された場合
-		if (e.Key == Key.Home && Keyboard.Modifiers == ModifierKeys.Control)
+		if (e.Key == Key.Home)
+		{
+			// 現在選択されているタブのコンテンツを取得
+			if (TabControlMain.SelectedItem is TabItem tabItem &&
+				tabItem.Content is Grid grid)
+			{
+				// GridからWebView2を検索
+				var webView = grid.Children.OfType<WebView2>().FirstOrDefault();
+				if (webView != null)
+				{
+					// WebViewのKeyDownイベントに処理を任せる
+					// このイベントハンドラでは何もしない
+					e.Handled = true;
+				}
+			}
+		}
+		else if (e.Key == Key.End)
 		{
 			// 現在選択されているタブのコンテンツを取得
 			if (TabControlMain.SelectedItem is TabItem tabItem &&
