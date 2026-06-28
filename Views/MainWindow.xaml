@@ -25,37 +25,77 @@
             <ColumnDefinition Width="{Binding RightColumnWidth, Mode=TwoWay}" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左：TabControl -->
-        <TabControl x:Name="TabControlMain"
-                    Grid.Column="0"
-                    Visibility="{Binding LeftPaneVisibility}">
-            <TabControl.Template>
-                <ControlTemplate TargetType="TabControl">
-                    <DockPanel>
-                        <ScrollViewer DockPanel.Dock="Top"
-                                    HorizontalScrollBarVisibility="Disabled"
-                                    VerticalScrollBarVisibility="Auto">
-                            <WrapPanel x:Name="HeaderPanel"
-                                    IsItemsHost="True"
-                                    Orientation="Horizontal"
-                                    KeyboardNavigation.TabIndex="1"/>
-                        </ScrollViewer>
-                        <ContentPresenter x:Name="PART_SelectedContentHost"
-                                        Content="{TemplateBinding SelectedContent}"
-                                        ContentSource="SelectedContent"
-                                        KeyboardNavigation.TabIndex="2"/>
-                    </DockPanel>
-                </ControlTemplate>
-            </TabControl.Template>
-            <TabControl.ItemContainerStyle>
-                <Style TargetType="TabItem" BasedOn="{StaticResource MaterialDesignTabItem}">
-                    <Setter Property="MaxWidth" Value="200" />
-                    <Setter Property="Height" Value="40" />
-                    <Setter Property="Margin" Value="0" />
-                    <Setter Property="FontWeight" Value="Normal" />
-                </Style>
-            </TabControl.ItemContainerStyle>
-        </TabControl>
+        <!-- 左：チャットサイト追加コントロール + TabControl -->
+        <Grid x:Name="LeftPane"
+              Grid.Column="0"
+              Visibility="{Binding LeftPaneVisibility}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Padding="8,6"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="{DynamicResource MaterialDesign.Brush.Divider}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ComboBox x:Name="ChatSiteComboBox"
+                              Grid.Column="0"
+                              DisplayMemberPath="Name"
+                              Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                              materialDesign:HintAssist.Hint="追加するチャット"
+                              SelectionChanged="ChatSiteComboBox_SelectionChanged"
+                              Margin="0,0,6,0"
+                              MinWidth="160" />
+
+                    <Button x:Name="AddChatTabButton"
+                            Grid.Column="1"
+                            Width="40"
+                            Height="40"
+                            Style="{StaticResource MaterialDesignIconButton}"
+                            ToolTip="選択したチャットサイトのタブを追加"
+                            Click="AddChatTabButton_Click"
+                            IsEnabled="False">
+                        <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <TabControl x:Name="TabControlMain"
+                        Grid.Row="1">
+                <TabControl.Template>
+                    <ControlTemplate TargetType="TabControl">
+                        <DockPanel>
+                            <ScrollViewer DockPanel.Dock="Top"
+                                        HorizontalScrollBarVisibility="Disabled"
+                                        VerticalScrollBarVisibility="Auto">
+                                <WrapPanel x:Name="HeaderPanel"
+                                        IsItemsHost="True"
+                                        Orientation="Horizontal"
+                                        KeyboardNavigation.TabIndex="1"/>
+                            </ScrollViewer>
+                            <ContentPresenter x:Name="PART_SelectedContentHost"
+                                            Content="{TemplateBinding SelectedContent}"
+                                            ContentSource="SelectedContent"
+                                            KeyboardNavigation.TabIndex="2"/>
+                        </DockPanel>
+                    </ControlTemplate>
+                </TabControl.Template>
+                <TabControl.ItemContainerStyle>
+                    <Style TargetType="TabItem" BasedOn="{StaticResource MaterialDesignTabItem}">
+                        <Setter Property="MaxWidth" Value="220" />
+                        <Setter Property="Height" Value="40" />
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="FontWeight" Value="Normal" />
+                    </Style>
+                </TabControl.ItemContainerStyle>
+            </TabControl>
+        </Grid>
 
         <!-- Splitter -->
         <GridSplitter Grid.Column="1"
