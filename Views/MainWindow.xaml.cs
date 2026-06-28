@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using AIChatHelper.Core.Controls;
 using AIChatHelper.Models;
 using MaterialDesignThemes.Wpf;
@@ -16,13 +17,50 @@ namespace AIChatHelper.Views;
 
 public partial class MainWindow : Window
 {
+	public static readonly DependencyProperty ActiveChatCommandTargetProperty =
+		DependencyProperty.Register(
+			nameof(ActiveChatCommandTarget),
+			typeof(object),
+			typeof(MainWindow),
+			new PropertyMetadata(null));
+
 	private readonly Core.Factory.IWindowFactory? _windowFactory;
 	private readonly List<ChatSite> _chatSites = new();
 	private readonly Dictionary<string, int> _tabNameCounts = new(StringComparer.OrdinalIgnoreCase);
+	private readonly List<ChatTabViewState> _chatTabStates = new();
+	private readonly Dictionary<TabItem, ChatTabViewState> _chatTabStatesByItem = new();
 	private Grid? _mainGrid;
 	private AvalonTextEditor? _avalonEditor;
 	private Image? _templateImage;
 	private Image? _historyImage;
+	private ChatTabViewState? _activeChatTabState;
+	private bool _isEqualContentDisplayMode;
+	private bool _isUpdatingSelection;
+
+	public object? ActiveChatCommandTarget
+	{
+		get => GetValue(ActiveChatCommandTargetProperty);
+		private set => SetValue(ActiveChatCommandTargetProperty, value);
+	}
+
+	private sealed class ChatTabViewState
+	{
+		public ChatTabViewState(ChatSite site, string displayName, TabItem tabItem, Grid contentElement)
+		{
+			Site = site;
+			DisplayName = displayName;
+			TabItem = tabItem;
+			ContentElement = contentElement;
+		}
+
+		public ChatSite Site { get; }
+		public string DisplayName { get; }
+		public TabItem TabItem { get; }
+		public Grid ContentElement { get; }
+		public Border? EqualColumnBorder { get; set; }
+		public ContentControl? EqualContentHost { get; set; }
+		public Button? EqualCloseButton { get; set; }
+	}
 
 	public MainWindow()
 	{
@@ -45,6 +83,7 @@ public partial class MainWindow : Window
 		viewModel.IsDarkTheme = isDarkMode;
 
 		TabControlMain.PreviewKeyDown += TabControlMain_PreviewKeyDown;
+		UpdateTabDisplayModeButton();
 
 		var config = settingsService.Load();
 		_chatSites.AddRange(config.ChatSites);
@@ -91,6 +130,12 @@ public partial class MainWindow : Window
 		}
 	}
 
+	private void ToggleTabDisplayModeButton_Click(object sender, RoutedEventArgs e)
+	{
+		_isEqualContentDisplayMode = ToggleTabDisplayModeButton.IsChecked == true;
+		ApplyLeftPaneDisplayMode();
+	}
+
 	private void CreateChatTab(ChatSite site, bool selectTab)
 	{
 		if (!TryCreateSiteUri(site, out var uri))
@@ -109,6 +154,7 @@ public partial class MainWindow : Window
 		};
 
 		browser.PreviewKeyDown += WebView_PreviewKeyDown;
+		browser.GotFocus += WebView_GotFocus;
 		browser.CoreWebView2InitializationCompleted += WebView_CoreWebView2InitializationCompleted;
 
 		var grid = new Grid();
@@ -122,10 +168,19 @@ public partial class MainWindow : Window
 		};
 		item.Header = CreateTabHeader(item, displayName);
 
+		var tabState = new ChatTabViewState(site, displayName, item, grid);
+		_chatTabStates.Add(tabState);
+		_chatTabStatesByItem[item] = tabState;
+
 		TabControlMain.Items.Add(item);
-		if (selectTab)
+		if (_activeChatTabState == null || selectTab)
 		{
-			TabControlMain.SelectedItem = item;
+			SetActiveChatTab(tabState);
+		}
+
+		if (_isEqualContentDisplayMode)
+		{
+			ApplyLeftPaneDisplayMode();
 		}
 	}
 
@@ -219,35 +274,66 @@ public partial class MainWindow : Window
 		}
 
 		var wasSelected = ReferenceEquals(TabControlMain.SelectedItem, tabItem);
+		var wasActive = _chatTabStatesByItem.TryGetValue(tabItem, out var closingState)
+			&& ReferenceEquals(_activeChatTabState, closingState);
 		DisposeChatTab(tabItem);
 		TabControlMain.Items.Remove(tabItem);
 
-		if (!wasSelected)
-		{
-			return;
-		}
-
 		if (TabControlMain.Items.Count == 0)
 		{
-			TabControlMain.SelectedItem = null;
+			SetActiveChatTab(null);
+			ApplyLeftPaneDisplayMode();
 			return;
 		}
 
-		var nextIndex = Math.Min(closedIndex, TabControlMain.Items.Count - 1);
-		TabControlMain.SelectedIndex = nextIndex;
+		if (wasSelected || wasActive || _activeChatTabState == null)
+		{
+			var nextIndex = Math.Min(closedIndex, TabControlMain.Items.Count - 1);
+			if (TabControlMain.Items[nextIndex] is TabItem nextTabItem &&
+				_chatTabStatesByItem.TryGetValue(nextTabItem, out var nextState))
+			{
+				SetActiveChatTab(nextState);
+			}
+		}
+
+		ApplyLeftPaneDisplayMode();
 	}
 
 	private void DisposeChatTab(TabItem tabItem)
 	{
-		if (tabItem.Header is StackPanel headerPanel)
+		if (!_chatTabStatesByItem.TryGetValue(tabItem, out var tabState))
 		{
-			foreach (var closeButton in headerPanel.Children.OfType<Button>())
-			{
-				closeButton.PreviewMouseLeftButtonDown -= CloseTabButton_PreviewMouseLeftButtonDown;
-				closeButton.Click -= CloseTabButton_Click;
-				closeButton.Tag = null;
-			}
+			DisposeLegacyChatTab(tabItem);
+			return;
 		}
+
+		DetachTabHeaderEvents(tabItem);
+		DetachEqualTabColumn(tabState);
+
+		if (ReferenceEquals(tabItem.Content, tabState.ContentElement))
+		{
+			tabItem.Content = null;
+		}
+		DetachContentElement(tabState.ContentElement);
+
+		foreach (var webView in tabState.ContentElement.Children.OfType<WebView2>().ToList())
+		{
+			DetachAndDisposeWebView(tabState.ContentElement, webView);
+		}
+
+		_chatTabStatesByItem.Remove(tabItem);
+		_chatTabStates.Remove(tabState);
+
+		if (ReferenceEquals(_activeChatTabState, tabState))
+		{
+			_activeChatTabState = null;
+			ActiveChatCommandTarget = null;
+		}
+	}
+
+	private void DisposeLegacyChatTab(TabItem tabItem)
+	{
+		DetachTabHeaderEvents(tabItem);
 
 		if (tabItem.Content is not Grid grid)
 		{
@@ -256,17 +342,36 @@ public partial class MainWindow : Window
 
 		foreach (var webView in grid.Children.OfType<WebView2>().ToList())
 		{
-			webView.PreviewKeyDown -= WebView_PreviewKeyDown;
-			webView.CoreWebView2InitializationCompleted -= WebView_CoreWebView2InitializationCompleted;
-			grid.Children.Remove(webView);
-			try
+			DetachAndDisposeWebView(grid, webView);
+		}
+	}
+
+	private void DetachTabHeaderEvents(TabItem tabItem)
+	{
+		if (tabItem.Header is Panel headerPanel)
+		{
+			foreach (var closeButton in headerPanel.Children.OfType<Button>())
 			{
-				webView.Dispose();
+				closeButton.PreviewMouseLeftButtonDown -= CloseTabButton_PreviewMouseLeftButtonDown;
+				closeButton.Click -= CloseTabButton_Click;
+				closeButton.Tag = null;
 			}
-			catch (Exception ex)
-			{
-				Debug.WriteLine($"WebView2破棄エラー: {ex.Message}");
-			}
+		}
+	}
+
+	private void DetachAndDisposeWebView(Grid ownerGrid, WebView2 webView)
+	{
+		webView.PreviewKeyDown -= WebView_PreviewKeyDown;
+		webView.GotFocus -= WebView_GotFocus;
+		webView.CoreWebView2InitializationCompleted -= WebView_CoreWebView2InitializationCompleted;
+		ownerGrid.Children.Remove(webView);
+		try
+		{
+			webView.Dispose();
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"WebView2破棄エラー: {ex.Message}");
 		}
 	}
 
@@ -315,10 +420,380 @@ public partial class MainWindow : Window
 
 	private TabItem? FindTabItemForWebView(WebView2 webView)
 	{
-		return TabControlMain.Items
-			.OfType<TabItem>()
-			.FirstOrDefault(tabItem =>
-				tabItem.Content is Grid grid && grid.Children.Contains(webView));
+		return _chatTabStates
+			.FirstOrDefault(state => state.ContentElement.Children.Contains(webView))
+			?.TabItem;
+	}
+
+	public IReadOnlyList<Grid> GetChatContentElements()
+	{
+		return _chatTabStates.Select(state => state.ContentElement).ToList();
+	}
+
+	private void TabControlMain_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (_isUpdatingSelection)
+		{
+			return;
+		}
+
+		if (TabControlMain.SelectedItem is TabItem tabItem &&
+			_chatTabStatesByItem.TryGetValue(tabItem, out var tabState))
+		{
+			SetActiveChatTab(tabState, updateSelection: false);
+		}
+	}
+
+	private void WebView_GotFocus(object sender, RoutedEventArgs e)
+	{
+		if (sender is WebView2 webView)
+		{
+			SetActiveChatTab(FindTabStateForWebView(webView));
+		}
+	}
+
+	private ChatTabViewState? FindTabStateForWebView(WebView2 webView)
+	{
+		return _chatTabStates.FirstOrDefault(state => state.ContentElement.Children.Contains(webView));
+	}
+
+	private void SetActiveChatTab(ChatTabViewState? tabState, bool updateSelection = true)
+	{
+		if (tabState != null && !_chatTabStates.Contains(tabState))
+		{
+			tabState = null;
+		}
+
+		_activeChatTabState = tabState;
+		ActiveChatCommandTarget = tabState?.ContentElement;
+
+		if (updateSelection)
+		{
+			_isUpdatingSelection = true;
+			try
+			{
+				TabControlMain.SelectedItem = tabState?.TabItem;
+			}
+			finally
+			{
+				_isUpdatingSelection = false;
+			}
+		}
+
+		UpdateEqualColumnActiveStates();
+	}
+
+	private void EnsureActiveChatTab()
+	{
+		if (_activeChatTabState != null && _chatTabStates.Contains(_activeChatTabState))
+		{
+			ActiveChatCommandTarget = _activeChatTabState.ContentElement;
+			return;
+		}
+
+		if (TabControlMain.SelectedItem is TabItem selectedTabItem &&
+			_chatTabStatesByItem.TryGetValue(selectedTabItem, out var selectedState))
+		{
+			SetActiveChatTab(selectedState);
+			return;
+		}
+
+		SetActiveChatTab(_chatTabStates.FirstOrDefault());
+	}
+
+	private void ApplyLeftPaneDisplayMode()
+	{
+		EnsureActiveChatTab();
+		UpdateTabDisplayModeButton();
+
+		if (_isEqualContentDisplayMode)
+		{
+			ShowEqualContentDisplay();
+			return;
+		}
+
+		ShowNormalTabDisplay();
+	}
+
+	private void ShowEqualContentDisplay()
+	{
+		ClearEqualContentColumns();
+		EqualTabContentHost.ColumnDefinitions.Clear();
+
+		foreach (var tabState in _chatTabStates)
+		{
+			if (ReferenceEquals(tabState.TabItem.Content, tabState.ContentElement))
+			{
+				tabState.TabItem.Content = null;
+			}
+			DetachContentElement(tabState.ContentElement);
+
+			EqualTabContentHost.ColumnDefinitions.Add(new ColumnDefinition
+			{
+				Width = new GridLength(1, GridUnitType.Star)
+			});
+
+			var column = CreateEqualTabColumn(tabState);
+			Grid.SetColumn(column, EqualTabContentHost.ColumnDefinitions.Count - 1);
+			EqualTabContentHost.Children.Add(column);
+		}
+
+		TabControlMain.Visibility = Visibility.Collapsed;
+		EqualTabContentHost.Visibility = Visibility.Visible;
+		UpdateEqualColumnActiveStates();
+	}
+
+	private void ShowNormalTabDisplay()
+	{
+		ClearEqualContentColumns();
+
+		foreach (var tabState in _chatTabStates)
+		{
+			if (!ReferenceEquals(tabState.TabItem.Content, tabState.ContentElement))
+			{
+				DetachContentElement(tabState.ContentElement);
+				tabState.TabItem.Content = tabState.ContentElement;
+			}
+		}
+
+		EqualTabContentHost.Visibility = Visibility.Collapsed;
+		TabControlMain.Visibility = Visibility.Visible;
+
+		if (_activeChatTabState != null)
+		{
+			SetActiveChatTab(_activeChatTabState);
+		}
+	}
+
+	private Border CreateEqualTabColumn(ChatTabViewState tabState)
+	{
+		var border = new Border
+		{
+			BorderThickness = new Thickness(1),
+			BorderBrush = GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray),
+			Background = Brushes.Transparent,
+			Tag = tabState
+		};
+		border.MouseLeftButtonDown += EqualTabColumn_MouseLeftButtonDown;
+
+		var columnGrid = new Grid
+		{
+			Tag = tabState
+		};
+		columnGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+		columnGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+		var headerGrid = new Grid
+		{
+			MinHeight = 36,
+			Margin = new Thickness(4, 2, 4, 2),
+			Tag = tabState
+		};
+		headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+		headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+		var title = new TextBlock
+		{
+			Text = tabState.DisplayName,
+			TextTrimming = TextTrimming.CharacterEllipsis,
+			VerticalAlignment = VerticalAlignment.Center,
+			Margin = new Thickness(6, 0, 4, 0)
+		};
+		Grid.SetColumn(title, 0);
+
+		var closeButton = new Button
+		{
+			Width = 28,
+			Height = 28,
+			Padding = new Thickness(0),
+			Focusable = false,
+			ToolTip = "タブを閉じる",
+			Tag = tabState,
+			Content = new PackIcon
+			{
+				Kind = PackIconKind.Close,
+				Width = 14,
+				Height = 14
+			}
+		};
+		if (TryFindResource("MaterialDesignIconButton") is Style closeButtonStyle)
+		{
+			closeButton.Style = closeButtonStyle;
+		}
+		closeButton.Click += EqualTabCloseButton_Click;
+		Grid.SetColumn(closeButton, 1);
+
+		headerGrid.Children.Add(title);
+		headerGrid.Children.Add(closeButton);
+		Grid.SetRow(headerGrid, 0);
+
+		var contentHost = new ContentControl
+		{
+			Content = tabState.ContentElement,
+			HorizontalContentAlignment = HorizontalAlignment.Stretch,
+			VerticalContentAlignment = VerticalAlignment.Stretch
+		};
+		Grid.SetRow(contentHost, 1);
+
+		columnGrid.Children.Add(headerGrid);
+		columnGrid.Children.Add(contentHost);
+		border.Child = columnGrid;
+
+		tabState.EqualColumnBorder = border;
+		tabState.EqualContentHost = contentHost;
+		tabState.EqualCloseButton = closeButton;
+
+		return border;
+	}
+
+	private void EqualTabColumn_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (sender is FrameworkElement { Tag: ChatTabViewState tabState })
+		{
+			SetActiveChatTab(tabState);
+		}
+	}
+
+	private void EqualTabCloseButton_Click(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		if (sender is Button { Tag: ChatTabViewState tabState })
+		{
+			CloseChatTab(tabState.TabItem);
+		}
+	}
+
+	private void ClearEqualContentColumns()
+	{
+		foreach (var tabState in _chatTabStates)
+		{
+			DetachEqualTabColumn(tabState);
+		}
+
+		EqualTabContentHost.Children.Clear();
+		EqualTabContentHost.ColumnDefinitions.Clear();
+	}
+
+	private void DetachEqualTabColumn(ChatTabViewState tabState)
+	{
+		if (tabState.EqualCloseButton != null)
+		{
+			tabState.EqualCloseButton.Click -= EqualTabCloseButton_Click;
+			tabState.EqualCloseButton.Tag = null;
+		}
+
+		if (tabState.EqualColumnBorder != null)
+		{
+			tabState.EqualColumnBorder.MouseLeftButtonDown -= EqualTabColumn_MouseLeftButtonDown;
+			if (tabState.EqualColumnBorder.Parent is Panel parentPanel)
+			{
+				parentPanel.Children.Remove(tabState.EqualColumnBorder);
+			}
+			tabState.EqualColumnBorder.Tag = null;
+			tabState.EqualColumnBorder.Child = null;
+		}
+
+		if (tabState.EqualContentHost != null)
+		{
+			if (ReferenceEquals(tabState.EqualContentHost.Content, tabState.ContentElement))
+			{
+				tabState.EqualContentHost.Content = null;
+			}
+			tabState.EqualContentHost = null;
+		}
+
+		tabState.EqualColumnBorder = null;
+		tabState.EqualCloseButton = null;
+	}
+
+	private void DetachContentElement(FrameworkElement contentElement)
+	{
+		if (contentElement.Parent is Panel panel)
+		{
+			panel.Children.Remove(contentElement);
+			return;
+		}
+
+		if (contentElement.Parent is ContentControl contentControl &&
+			ReferenceEquals(contentControl.Content, contentElement))
+		{
+			contentControl.Content = null;
+			return;
+		}
+
+		if (contentElement.Parent is ContentPresenter contentPresenter &&
+			ReferenceEquals(contentPresenter.Content, contentElement))
+		{
+			contentPresenter.Content = null;
+			return;
+		}
+
+		if (contentElement.Parent is Decorator decorator &&
+			ReferenceEquals(decorator.Child, contentElement))
+		{
+			decorator.Child = null;
+			return;
+		}
+
+		var logicalParent = LogicalTreeHelper.GetParent(contentElement);
+		if (logicalParent is ContentControl logicalContentControl &&
+			ReferenceEquals(logicalContentControl.Content, contentElement))
+		{
+			logicalContentControl.Content = null;
+		}
+		else if (logicalParent is ContentPresenter logicalContentPresenter &&
+			ReferenceEquals(logicalContentPresenter.Content, contentElement))
+		{
+			logicalContentPresenter.Content = null;
+		}
+		else if (logicalParent is TabItem tabItem &&
+			ReferenceEquals(tabItem.Content, contentElement))
+		{
+			tabItem.Content = null;
+		}
+	}
+
+	private void UpdateEqualColumnActiveStates()
+	{
+		foreach (var tabState in _chatTabStates)
+		{
+			if (tabState.EqualColumnBorder == null)
+			{
+				continue;
+			}
+
+			var isActive = ReferenceEquals(tabState, _activeChatTabState);
+			tabState.EqualColumnBorder.BorderThickness = isActive
+				? new Thickness(2)
+				: new Thickness(1);
+			tabState.EqualColumnBorder.BorderBrush = isActive
+				? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
+				: GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray);
+		}
+	}
+
+	private void UpdateTabDisplayModeButton()
+	{
+		if (ToggleTabDisplayModeButton == null || ToggleTabDisplayModeIcon == null)
+		{
+			return;
+		}
+
+		ToggleTabDisplayModeButton.IsChecked = _isEqualContentDisplayMode;
+		ToggleTabDisplayModeButton.ToolTip = _isEqualContentDisplayMode
+			? "通常のタブ表示に戻す"
+			: "すべてのタブを等分表示";
+		ToggleTabDisplayModeIcon.Kind = _isEqualContentDisplayMode
+			? PackIconKind.ViewAgendaOutline
+			: PackIconKind.ViewColumnOutline;
+		ToggleTabDisplayModeButton.Foreground = _isEqualContentDisplayMode
+			? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
+			: GetBrushResource("MaterialDesign.Brush.Foreground", SystemColors.ControlTextBrush);
+	}
+
+	private Brush GetBrushResource(string resourceKey, Brush fallback)
+	{
+		return TryFindResource(resourceKey) as Brush ?? fallback;
 	}
 
 	private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -400,6 +875,11 @@ public partial class MainWindow : Window
 			// ViewModelに保存
 			viewModel.SaveColumnWidths(newLeftWidth, newRightWidth);
 		}
+
+		if (_isEqualContentDisplayMode)
+		{
+			ApplyLeftPaneDisplayMode();
+		}
 	}
 
 	// システムテーマを検出（起動時のみ使用）
@@ -420,12 +900,15 @@ public partial class MainWindow : Window
 
 	protected override void OnClosed(EventArgs e)
 	{
-		foreach (var tabItem in TabControlMain.Items.OfType<TabItem>().ToList())
+		foreach (var tabState in _chatTabStates.ToList())
 		{
-			DisposeChatTab(tabItem);
+			DisposeChatTab(tabState.TabItem);
 		}
+		ClearEqualContentColumns();
 		TabControlMain.Items.Clear();
 		TabControlMain.PreviewKeyDown -= TabControlMain_PreviewKeyDown;
+		ToggleTabDisplayModeButton.Click -= ToggleTabDisplayModeButton_Click;
+		TabControlMain.SelectionChanged -= TabControlMain_SelectionChanged;
 		base.OnClosed(e);
 	}
 }

@@ -406,31 +406,24 @@ public partial class MainWindowViewModel : ObservableObject
 			avalonEditor?.ApplyTheme(IsDarkTheme);
 
 			// TabControlのすべてのタブ内のWebView2のテーマを変更
-			var tabControl = mainWindow.FindName("TabControlMain") as TabControl;
-			if (tabControl != null)
+			foreach (var grid in mainWindow.GetChatContentElements())
 			{
-				foreach (TabItem tabItem in tabControl.Items)
+				var webView = grid.Children.OfType<WebView2>().FirstOrDefault();
+				if (webView != null && webView.CoreWebView2 != null)
 				{
-					if (tabItem.Content is Grid grid)
+					// ダークモード設定を適用
+					try
 					{
-						var webView = grid.Children.OfType<WebView2>().FirstOrDefault();
-						if (webView != null && webView.CoreWebView2 != null)
-						{
-							// ダークモード設定を適用
-							try
-							{
-								// WebView2のプリファレンス設定でダークモードを切り替え
-								webView.CoreWebView2.Profile.PreferredColorScheme =
-									IsDarkTheme
-										? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
-										: Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
-							}
-							catch (Exception ex)
-							{
-								// CoreWebView2がまだ初期化されていない場合などに例外が発生する可能性がある
-								Debug.WriteLine($"WebView2テーマ設定エラー: {ex.Message}");
-							}
-						}
+						// WebView2のプリファレンス設定でダークモードを切り替え
+						webView.CoreWebView2.Profile.PreferredColorScheme =
+							IsDarkTheme
+								? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
+								: Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
+					}
+					catch (Exception ex)
+					{
+						// CoreWebView2がまだ初期化されていない場合などに例外が発生する可能性がある
+						Debug.WriteLine($"WebView2テーマ設定エラー: {ex.Message}");
 					}
 				}
 			}
