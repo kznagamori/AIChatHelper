@@ -22,6 +22,8 @@ public class Config
 	public TemplateSettings TemplateSettings { get; set; } = new TemplateSettings();
 	// チャット入力後に実行する処理の設定
 	public ExecuteAfterSendSettings ExecuteAfterSendSettings { get; set; } = new ExecuteAfterSendSettings();
+	// アプリの表示状態に関する設定
+	public UiStateSettings UiState { get; set; } = new UiStateSettings();
 }
 
 public class TemplateSettings
@@ -47,6 +49,23 @@ public class ServiceExecutorSettings
 	public List<string> UrlPatterns { get; set; } = new List<string>();
 	public List<string> SubmitButtonSelectors { get; set; } = new List<string>();
 	public string KeyboardFallback { get; set; } = "None";
+}
+
+public class UiStateSettings
+{
+	public int ActiveLeftTabIndex { get; set; } = 0;
+	public string RightPaneSelectedTab { get; set; } = "History";
+	public bool? IsDarkTheme { get; set; }
+	public bool? ExecuteAfterSend { get; set; }
+	public List<LeftPaneTabState> LeftPaneTabs { get; set; } = new List<LeftPaneTabState>();
+}
+
+[TomlDoNotInlineObjectAttribute]
+public class LeftPaneTabState
+{
+	public string SiteName { get; set; } = string.Empty;
+	public string Url { get; set; } = string.Empty;
+	public string DisplayName { get; set; } = string.Empty;
 }
 
 // エディタ設定クラスを新規作成

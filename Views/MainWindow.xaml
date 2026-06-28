@@ -226,6 +226,17 @@
                             Margin="0,0,8,0">
                     <Button Width="24" Height="24"
                             Style="{StaticResource MaterialDesignIconForegroundButton}"
+                            Click="OpenSettingsButton_Click"
+                            Margin="0,0,8,0"
+                            ToolTip="設定を開く"
+                            x:Name="SettingsButton">
+                            <materialDesign:PackIcon
+                                Width="24"
+                                Height="24"
+                                Kind="Cog" />
+                    </Button>
+                    <Button Width="24" Height="24"
+                            Style="{StaticResource MaterialDesignIconForegroundButton}"
                             Command="{Binding OpenInformationWindowCommand}"
                             Margin="0,0,8,0"
                             x:Name="InformationButton">
@@ -238,11 +249,14 @@
             </DockPanel>
 
             <!-- 2行目：履歴・テンプレートタブ -->
-            <TabControl Grid.Row="1"
+            <TabControl x:Name="RightPaneContentTabControl"
+                        Grid.Row="1"
                         Margin="0,8,0,8"
                         Height="370"
-                        SelectedIndex="0">
-                <TabItem Header="履歴">
+                        SelectedValuePath="Tag"
+                        SelectedValue="{Binding RightPaneSelectedTab, Mode=TwoWay}">
+                <TabItem Header="履歴"
+                         Tag="History">
                     <Grid Margin="4">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -314,7 +328,8 @@
                     </Grid>
                 </TabItem>
 
-                <TabItem Header="テンプレート">
+                <TabItem Header="テンプレート"
+                         Tag="Template">
                     <Grid Margin="4">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />

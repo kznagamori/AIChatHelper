@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using AIChatHelper.Core.Controls;
 using AIChatHelper.Models;
 using MaterialDesignThemes.Wpf;
@@ -25,15 +26,20 @@ public partial class MainWindow : Window
 			new PropertyMetadata(null));
 
 	private readonly Core.Factory.IWindowFactory? _windowFactory;
+	private readonly Core.Services.ISettingsService? _settingsService;
 	private readonly List<ChatSite> _chatSites = new();
 	private readonly Dictionary<string, int> _tabNameCounts = new(StringComparer.OrdinalIgnoreCase);
 	private readonly List<ChatTabViewState> _chatTabStates = new();
 	private readonly Dictionary<TabItem, ChatTabViewState> _chatTabStatesByItem = new();
+	private readonly DispatcherTimer _uiStateSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
 	private Grid? _mainGrid;
 	private AvalonTextEditor? _avalonEditor;
+	private ViewModels.MainWindowViewModel? _mainViewModel;
 	private ChatTabViewState? _activeChatTabState;
 	private bool _isEqualContentDisplayMode;
 	private bool _isUpdatingSelection;
+	private bool _suppressUiStateSave = true;
+	private bool _isSettingsWindowOpen;
 
 	public object? ActiveChatCommandTarget
 	{
@@ -63,6 +69,7 @@ public partial class MainWindow : Window
 	public MainWindow()
 	{
 		InitializeComponent();
+		_uiStateSaveTimer.Tick += UiStateSaveTimer_Tick;
 	}
 
 	public MainWindow(Core.Factory.IWindowFactory windowFactory,
@@ -72,18 +79,22 @@ public partial class MainWindow : Window
 	{
 		DataContext = viewModel;
 		_windowFactory = windowFactory;
+		_settingsService = settingsService;
+		_mainViewModel = viewModel;
 
 		// メインのGridを参照として保持
 		_mainGrid = (Grid)Content;
 
+		var config = settingsService.Load();
+
 		// 起動時のみOSのテーマを検出して、WebView2初期化前にViewModelへ反映
-		bool isDarkMode = IsSystemInDarkMode();
+		bool isDarkMode = config.Config.UiState?.IsDarkTheme ?? IsSystemInDarkMode();
 		viewModel.IsDarkTheme = isDarkMode;
+		viewModel.UiStateChanged += MainViewModel_UiStateChanged;
 
 		TabControlMain.PreviewKeyDown += TabControlMain_PreviewKeyDown;
 		UpdateTabDisplayModeButton();
 
-		var config = settingsService.Load();
 		_chatSites.AddRange(config.ChatSites);
 		ChatSiteComboBox.ItemsSource = _chatSites;
 		AddChatTabButton.IsEnabled = _chatSites.Count > 0;
@@ -92,14 +103,7 @@ public partial class MainWindow : Window
 			ChatSiteComboBox.SelectedIndex = 0;
 		}
 
-		foreach (var site in _chatSites)
-		{
-			CreateChatTab(site, selectTab: false);
-		}
-		if (TabControlMain.Items.Count > 0)
-		{
-			TabControlMain.SelectedIndex = 0;
-		}
+		RestoreLeftPaneTabs(config.Config.UiState, _chatSites);
 
 		// AvalonEditorの参照を取得
 		_avalonEditor = FindName("AvalonEditor") as AvalonTextEditor;
@@ -109,6 +113,7 @@ public partial class MainWindow : Window
 
 		// ウィンドウがロードされた後に履歴ビューを最下部にスクロール
 		Loaded += MainWindow_Loaded;
+		_suppressUiStateSave = false;
 	}
 
 	private void ChatSiteComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -130,7 +135,7 @@ public partial class MainWindow : Window
 		ApplyLeftPaneDisplayMode();
 	}
 
-	private void CreateChatTab(ChatSite site, bool selectTab)
+	private void CreateChatTab(ChatSite site, bool selectTab, string? displayNameOverride = null)
 	{
 		if (!TryCreateSiteUri(site, out var uri))
 		{
@@ -154,7 +159,9 @@ public partial class MainWindow : Window
 		var grid = new Grid();
 		grid.Children.Add(browser);
 
-		var displayName = GetNextTabDisplayName(site);
+		var displayName = string.IsNullOrWhiteSpace(displayNameOverride)
+			? GetNextTabDisplayName(site)
+			: RegisterRestoredTabDisplayName(site, displayNameOverride);
 		var item = new TabItem
 		{
 			Content = grid,
@@ -176,6 +183,62 @@ public partial class MainWindow : Window
 		{
 			ApplyLeftPaneDisplayMode();
 		}
+
+		RequestDebouncedUiStateSave();
+	}
+
+	private void RestoreLeftPaneTabs(UiStateSettings? uiState, IReadOnlyList<ChatSite> chatSites)
+	{
+		var restoredAny = false;
+		if (uiState?.LeftPaneTabs is { Count: > 0 } savedTabs)
+		{
+			foreach (var savedTab in savedTabs)
+			{
+				var site = FindMatchingChatSite(savedTab, chatSites);
+				if (site == null)
+				{
+					continue;
+				}
+
+				CreateChatTab(site, selectTab: false, savedTab.DisplayName);
+				restoredAny = true;
+			}
+		}
+
+		if (!restoredAny)
+		{
+			foreach (var site in chatSites)
+			{
+				CreateChatTab(site, selectTab: false);
+			}
+		}
+
+		if (_chatTabStates.Count == 0)
+		{
+			SetActiveChatTab(null);
+			return;
+		}
+
+		var activeIndex = Math.Clamp(uiState?.ActiveLeftTabIndex ?? 0, 0, _chatTabStates.Count - 1);
+		SetActiveChatTab(_chatTabStates[activeIndex]);
+	}
+
+	private static ChatSite? FindMatchingChatSite(LeftPaneTabState savedTab, IReadOnlyList<ChatSite> chatSites)
+	{
+		return chatSites.FirstOrDefault(site =>
+				string.Equals(site.Name, savedTab.SiteName, StringComparison.OrdinalIgnoreCase) &&
+				AreSameUrl(site.Url, savedTab.Url))
+			?? chatSites.FirstOrDefault(site => AreSameUrl(site.Url, savedTab.Url));
+	}
+
+	private static bool AreSameUrl(string? left, string? right)
+	{
+		return string.Equals(NormalizeUrlForState(left), NormalizeUrlForState(right), StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static string NormalizeUrlForState(string? value)
+	{
+		return (value ?? string.Empty).Trim().TrimEnd('/');
 	}
 
 	private bool TryCreateSiteUri(ChatSite site, out Uri uri)
@@ -187,13 +250,54 @@ public partial class MainWindow : Window
 
 	private string GetNextTabDisplayName(ChatSite site)
 	{
-		var baseName = string.IsNullOrWhiteSpace(site.Name) ? "無題" : site.Name.Trim();
+		var baseName = GetTabBaseName(site);
 		var nextCount = _tabNameCounts.TryGetValue(baseName, out var currentCount)
 			? currentCount + 1
 			: 1;
 		_tabNameCounts[baseName] = nextCount;
 
 		return nextCount == 1 ? baseName : $"{baseName} ({nextCount})";
+	}
+
+	private string RegisterRestoredTabDisplayName(ChatSite site, string displayName)
+	{
+		var baseName = GetTabBaseName(site);
+		var restoredDisplayName = displayName.Trim();
+		var restoredCount = GetRestoredDisplayNameCount(baseName, restoredDisplayName);
+		if (_tabNameCounts.TryGetValue(baseName, out var currentCount))
+		{
+			_tabNameCounts[baseName] = Math.Max(currentCount, restoredCount);
+		}
+		else
+		{
+			_tabNameCounts[baseName] = restoredCount;
+		}
+
+		return restoredDisplayName;
+	}
+
+	private static string GetTabBaseName(ChatSite site)
+	{
+		return string.IsNullOrWhiteSpace(site.Name) ? "無題" : site.Name.Trim();
+	}
+
+	private static int GetRestoredDisplayNameCount(string baseName, string displayName)
+	{
+		if (string.Equals(baseName, displayName, StringComparison.OrdinalIgnoreCase))
+		{
+			return 1;
+		}
+
+		var prefix = baseName + " (";
+		if (displayName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+			displayName.EndsWith(")", StringComparison.Ordinal) &&
+			int.TryParse(displayName[prefix.Length..^1], out var parsedCount) &&
+			parsedCount > 0)
+		{
+			return parsedCount;
+		}
+
+		return 1;
 	}
 
 	private FrameworkElement CreateTabHeader(TabItem tabItem, string displayName)
@@ -291,6 +395,7 @@ public partial class MainWindow : Window
 		}
 
 		ApplyLeftPaneDisplayMode();
+		RequestDebouncedUiStateSave();
 	}
 
 	private void DisposeChatTab(TabItem tabItem)
@@ -475,6 +580,7 @@ public partial class MainWindow : Window
 		}
 
 		UpdateEqualColumnActiveStates();
+		RequestDebouncedUiStateSave();
 	}
 
 	private void EnsureActiveChatTab()
@@ -800,6 +906,107 @@ public partial class MainWindow : Window
 		Loaded -= MainWindow_Loaded;
 	}
 
+	private void MainViewModel_UiStateChanged(object? sender, EventArgs e)
+	{
+		RequestDebouncedUiStateSave();
+	}
+
+	private void UiStateSaveTimer_Tick(object? sender, EventArgs e)
+	{
+		_uiStateSaveTimer.Stop();
+		SaveCurrentUiStateImmediately();
+	}
+
+	private void RequestDebouncedUiStateSave()
+	{
+		if (_suppressUiStateSave || _isSettingsWindowOpen)
+		{
+			return;
+		}
+
+		_uiStateSaveTimer.Stop();
+		_uiStateSaveTimer.Start();
+	}
+
+	private void SaveCurrentUiStateImmediately(bool showErrorMessage = false)
+	{
+		if (_settingsService == null)
+		{
+			return;
+		}
+
+		try
+		{
+			_uiStateSaveTimer.Stop();
+			_settingsService.SaveUiState(CaptureUiState());
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"UI状態の保存に失敗しました: {ex}");
+			if (showErrorMessage)
+			{
+				MessageBox.Show(
+					$"現在の状態を settings.toml に保存できませんでした。\n{ex.Message}",
+					"設定保存エラー",
+					MessageBoxButton.OK,
+					MessageBoxImage.Warning);
+			}
+		}
+	}
+
+	private UiStateSettings CaptureUiState()
+	{
+		var viewModel = _mainViewModel ?? DataContext as ViewModels.MainWindowViewModel;
+		var activeIndex = _activeChatTabState == null
+			? 0
+			: Math.Max(0, _chatTabStates.IndexOf(_activeChatTabState));
+
+		return new UiStateSettings
+		{
+			ActiveLeftTabIndex = activeIndex,
+			RightPaneSelectedTab = NormalizeRightPaneSelectedTab(viewModel?.RightPaneSelectedTab),
+			IsDarkTheme = viewModel?.IsDarkTheme,
+			ExecuteAfterSend = viewModel?.ExecuteAfterSend,
+			LeftPaneTabs = _chatTabStates.Select(tabState => new LeftPaneTabState
+			{
+				SiteName = tabState.Site.Name,
+				Url = tabState.Site.Url,
+				DisplayName = tabState.DisplayName
+			}).ToList()
+		};
+	}
+
+	private static string NormalizeRightPaneSelectedTab(string? value)
+	{
+		return string.Equals(value, "Template", StringComparison.OrdinalIgnoreCase)
+			? "Template"
+			: "History";
+	}
+
+	private void OpenSettingsButton_Click(object sender, RoutedEventArgs e)
+	{
+		SaveCurrentUiStateImmediately(showErrorMessage: true);
+
+		if (_windowFactory == null)
+		{
+			return;
+		}
+
+		_isSettingsWindowOpen = true;
+		_uiStateSaveTimer.Stop();
+		try
+		{
+			var dlg = _windowFactory.CreateWindow<SettingsWindow>();
+			dlg.Owner = this;
+			dlg.ShowDialog();
+		}
+		finally
+		{
+			_isSettingsWindowOpen = false;
+			SaveCurrentUiStateImmediately();
+		}
+	}
+
 	private void WebView_PreviewKeyDown(object sender, KeyEventArgs e)
 	{
 		// Ctrl+Homeが押された場合
@@ -958,6 +1165,15 @@ public partial class MainWindow : Window
 
 	protected override void OnClosed(EventArgs e)
 	{
+		SaveCurrentUiStateImmediately();
+		_suppressUiStateSave = true;
+		_uiStateSaveTimer.Stop();
+
+		if (_mainViewModel != null)
+		{
+			_mainViewModel.UiStateChanged -= MainViewModel_UiStateChanged;
+		}
+
 		foreach (var tabState in _chatTabStates.ToList())
 		{
 			DisposeChatTab(tabState.TabItem);
@@ -965,6 +1181,7 @@ public partial class MainWindow : Window
 		ClearEqualContentColumns();
 		TabControlMain.Items.Clear();
 		TabControlMain.PreviewKeyDown -= TabControlMain_PreviewKeyDown;
+		_uiStateSaveTimer.Tick -= UiStateSaveTimer_Tick;
 		ToggleTabDisplayModeButton.Click -= ToggleTabDisplayModeButton_Click;
 		TabControlMain.SelectionChanged -= TabControlMain_SelectionChanged;
 		base.OnClosed(e);

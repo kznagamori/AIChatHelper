@@ -1,0 +1,690 @@
+<Window x:Class="AIChatHelper.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Style="{StaticResource MaterialDesignWindow}"
+        TextElement.Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+        Background="{DynamicResource MaterialDesign.Brush.Background}"
+        Title="設定"
+        Height="760"
+        Width="1040"
+        MinHeight="560"
+        MinWidth="860"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://siteoforigin:,,,/Assets/app.ico">
+    <Window.Resources>
+        <Style x:Key="SettingsDataGridTextBlockStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Foreground}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style x:Key="SettingsDataGridTextBoxStyle" TargetType="{x:Type TextBox}">
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Foreground}" />
+            <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Background}" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0"
+              Margin="0,0,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Grid.Column="0"
+                       Text="ファイル:"
+                       FontWeight="SemiBold"
+                       Margin="0,0,8,4" />
+            <TextBlock Grid.Row="0"
+                       Grid.Column="1"
+                       Text="{Binding SettingsFilePath}"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="0,0,0,4" />
+
+            <TextBlock Grid.Row="1"
+                       Grid.Column="0"
+                       Text="リポジトリ:"
+                       FontWeight="SemiBold"
+                       Margin="0,0,8,4" />
+            <TextBlock Grid.Row="1"
+                       Grid.Column="1"
+                       Margin="0,0,0,4">
+                <Hyperlink Command="{Binding OpenRepositoryUrlCommand}">
+                    <Run Text="{Binding RepositoryUrl}" />
+                </Hyperlink>
+            </TextBlock>
+
+            <TextBlock Grid.Row="2"
+                       Grid.Column="0"
+                       Text="設定ガイド:"
+                       FontWeight="SemiBold"
+                       Margin="0,0,8,0" />
+            <TextBlock Grid.Row="2"
+                       Grid.Column="1">
+                <Hyperlink Command="{Binding OpenSettingsDocumentationUrlCommand}">
+                    <Run Text="{Binding SettingsDocumentationUrl}" />
+                </Hyperlink>
+            </TextBlock>
+        </Grid>
+
+        <TabControl Grid.Row="1"
+                    Background="{DynamicResource MaterialDesign.Brush.Background}">
+            <TabItem Header="チャットサイト">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,0,0,8">
+                        <Button Command="{Binding AddChatSiteCommand}"
+                                ToolTip="追加"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+                        </Button>
+                        <Button Command="{Binding RemoveChatSiteCommand}"
+                                ToolTip="削除"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
+                        </Button>
+                        <Button Command="{Binding MoveChatSiteUpCommand}"
+                                ToolTip="上へ"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
+                        </Button>
+                        <Button Command="{Binding MoveChatSiteDownCommand}"
+                                ToolTip="下へ"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
+                        </Button>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding ChatSites}"
+                              SelectedItem="{Binding SelectedChatSite, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserSortColumns="False"
+                              HeadersVisibility="Column"
+                              Background="{DynamicResource MaterialDesign.Brush.Background}"
+                              Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name"
+                                                Width="220"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                Binding="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Header="Url"
+                                                Width="*"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                Binding="{Binding Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="入力欄">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,0,0,8">
+                        <Button Command="{Binding AddInputSelectorCommand}"
+                                ToolTip="追加"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+                        </Button>
+                        <Button Command="{Binding RemoveInputSelectorCommand}"
+                                ToolTip="削除"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
+                        </Button>
+                        <Button Command="{Binding MoveInputSelectorUpCommand}"
+                                ToolTip="上へ"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
+                        </Button>
+                        <Button Command="{Binding MoveInputSelectorDownCommand}"
+                                ToolTip="下へ"
+                                Style="{StaticResource MaterialDesignIconButton}">
+                            <materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
+                        </Button>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding InputSelectors}"
+                              SelectedItem="{Binding SelectedInputSelector, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserSortColumns="False"
+                              HeadersVisibility="Column"
+                              Background="{DynamicResource MaterialDesign.Brush.Background}"
+                              Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="CSS セレクター"
+                                                Width="*"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                Binding="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="エディタ">
+                <Grid Margin="0,16,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <CheckBox Grid.Row="0"
+                              Content="テンプレート選択時に上書き確認を表示"
+                              IsChecked="{Binding ConfirmTemplateOverwrite, Mode=TwoWay}" />
+                    <CheckBox Grid.Row="1"
+                              Content="履歴選択時に上書き確認を表示"
+                              IsChecked="{Binding ConfirmHistoryOverwrite, Mode=TwoWay}"
+                              Margin="0,8,0,0" />
+                    <CheckBox Grid.Row="2"
+                              Content="エディタクリア時にテンプレートテキストを挿入"
+                              IsChecked="{Binding InsertTemplateTextOnClear, Mode=TwoWay}"
+                              Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="3"
+                               Text="テンプレートテキスト"
+                               FontWeight="SemiBold"
+                               Margin="0,16,0,6" />
+                    <TextBox Grid.Row="4"
+                             Text="{Binding TemplateTextForEditor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
+                             Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+                             Padding="8" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="テンプレート">
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="テンプレートディレクトリ"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="0,0,12,0" />
+                    <TextBox Grid.Column="1"
+                             Text="{Binding TemplateDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
+                             Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+                             Margin="0,0,8,0" />
+                    <Button Grid.Column="2"
+                            Command="{Binding BrowseTemplateDirectoryCommand}"
+                            ToolTip="フォルダーを選択"
+                            Style="{StaticResource MaterialDesignIconButton}">
+                        <materialDesign:PackIcon Kind="FolderOpenOutline" Width="22" Height="22" />
+                    </Button>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="送信後実行">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="0,16,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0"
+                              Margin="0,0,0,12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="180" />
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Row="0"
+                                      Grid.Column="0"
+                                      Grid.ColumnSpan="2"
+                                      Content="既定で送信後実行を有効にする"
+                                      IsChecked="{Binding ExecuteDefaultEnabled, Mode=TwoWay}" />
+                            <CheckBox Grid.Row="0"
+                                      Grid.Column="2"
+                                      Grid.ColumnSpan="2"
+                                      Content="DOM 解析ログを出力"
+                                      IsChecked="{Binding EnableDomAnalysisLog, Mode=TwoWay}" />
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Text="実行待ち時間 ms"
+                                       VerticalAlignment="Center"
+                                       Margin="0,12,8,0" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Text="{Binding ExecutionTimeoutMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,12,24,0" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="2"
+                                       Text="入力後待ち時間 ms"
+                                       VerticalAlignment="Center"
+                                       Margin="0,12,8,0" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="3"
+                                     Text="{Binding PostInputDelayMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,12,0,0" />
+
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="0"
+                                       Text="リトライ間隔 ms"
+                                       VerticalAlignment="Center"
+                                       Margin="0,12,8,0" />
+                            <TextBox Grid.Row="2"
+                                     Grid.Column="1"
+                                     Text="{Binding RetryIntervalMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,12,24,0" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="2"
+                                       Text="未対応サービス時"
+                                       VerticalAlignment="Center"
+                                       Margin="0,12,8,0" />
+                            <ComboBox Grid.Row="2"
+                                      Grid.Column="3"
+                                      ItemsSource="{Binding UnsupportedServiceBehaviorOptions}"
+                                      SelectedItem="{Binding UnsupportedServiceBehavior, Mode=TwoWay}"
+                                      Margin="0,12,0,0" />
+                        </Grid>
+
+                        <Grid Grid.Row="1"
+                              Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="サービス別実行設定"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal">
+                                <Button Command="{Binding AddServiceExecutorCommand}"
+                                        ToolTip="追加"
+                                        Style="{StaticResource MaterialDesignIconButton}">
+                                    <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+                                </Button>
+                                <Button Command="{Binding RemoveServiceExecutorCommand}"
+                                        ToolTip="削除"
+                                        Style="{StaticResource MaterialDesignIconButton}">
+                                    <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
+                                </Button>
+                                <Button Command="{Binding MoveServiceExecutorUpCommand}"
+                                        ToolTip="上へ"
+                                        Style="{StaticResource MaterialDesignIconButton}">
+                                    <materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
+                                </Button>
+                                <Button Command="{Binding MoveServiceExecutorDownCommand}"
+                                        ToolTip="下へ"
+                                        Style="{StaticResource MaterialDesignIconButton}">
+                                    <materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <DataGrid Grid.Row="2"
+                                  ItemsSource="{Binding ServiceExecutors}"
+                                  SelectedItem="{Binding SelectedServiceExecutor, Mode=TwoWay}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  CanUserSortColumns="False"
+                                  HeadersVisibility="Column"
+                                  MinHeight="140"
+                                  MaxHeight="180"
+                                  Background="{DynamicResource MaterialDesign.Brush.Background}"
+                                  Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ServiceName"
+                                                    Width="260"
+                                                    ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                    EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                    Binding="{Binding ServiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Header="KeyboardFallback"
+                                                    Width="180"
+                                                    ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                    EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                    Binding="{Binding KeyboardFallback, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <DataGridTextColumn Header="UrlPatterns"
+                                                    Width="*"
+                                                    IsReadOnly="True"
+                                                    ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                    Binding="{Binding UrlPatterns.Count}" />
+                                <DataGridTextColumn Header="SubmitButtonSelectors"
+                                                    Width="*"
+                                                    IsReadOnly="True"
+                                                    ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                    Binding="{Binding SubmitButtonSelectors.Count}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Grid Grid.Row="3"
+                              Margin="0,16,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Row="0"
+                                  Grid.Column="0"
+                                  Grid.ColumnSpan="2"
+                                  Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="240" />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="180" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="サービス名"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding SelectedServiceExecutor.ServiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,16,0" />
+                                <TextBlock Grid.Column="2"
+                                           Text="キーボード代替"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold" />
+                                <ComboBox Grid.Column="3"
+                                          ItemsSource="{Binding KeyboardFallbackOptions}"
+                                          SelectedItem="{Binding SelectedServiceExecutor.KeyboardFallback, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Grid.Row="1"
+                                  Grid.Column="0"
+                                  Margin="0,0,8,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0"
+                                      Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="UrlPatterns"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal">
+                                        <Button Command="{Binding AddUrlPatternCommand}"
+                                                ToolTip="追加"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+                                        </Button>
+                                        <Button Command="{Binding RemoveUrlPatternCommand}"
+                                                ToolTip="削除"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
+                                        </Button>
+                                        <Button Command="{Binding MoveUrlPatternUpCommand}"
+                                                ToolTip="上へ"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
+                                        </Button>
+                                        <Button Command="{Binding MoveUrlPatternDownCommand}"
+                                                ToolTip="下へ"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                                <DataGrid Grid.Row="1"
+                                          ItemsSource="{Binding SelectedServiceExecutor.UrlPatterns}"
+                                          SelectedItem="{Binding SelectedServiceExecutor.SelectedUrlPattern, Mode=TwoWay}"
+                                          AutoGenerateColumns="False"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          CanUserSortColumns="False"
+                                          HeadersVisibility="Column"
+                                          MinHeight="160"
+                                          Background="{DynamicResource MaterialDesign.Brush.Background}"
+                                          Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Pattern"
+                                                            Width="*"
+                                                            ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                            EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                            Binding="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+
+                            <Grid Grid.Row="1"
+                                  Grid.Column="1"
+                                  Margin="8,0,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0"
+                                      Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="SubmitButtonSelectors"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal">
+                                        <Button Command="{Binding AddSubmitButtonSelectorCommand}"
+                                                ToolTip="追加"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+                                        </Button>
+                                        <Button Command="{Binding RemoveSubmitButtonSelectorCommand}"
+                                                ToolTip="削除"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
+                                        </Button>
+                                        <Button Command="{Binding MoveSubmitButtonSelectorUpCommand}"
+                                                ToolTip="上へ"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
+                                        </Button>
+                                        <Button Command="{Binding MoveSubmitButtonSelectorDownCommand}"
+                                                ToolTip="下へ"
+                                                Style="{StaticResource MaterialDesignIconButton}">
+                                            <materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                                <DataGrid Grid.Row="1"
+                                          ItemsSource="{Binding SelectedServiceExecutor.SubmitButtonSelectors}"
+                                          SelectedItem="{Binding SelectedServiceExecutor.SelectedSubmitButtonSelector, Mode=TwoWay}"
+                                          AutoGenerateColumns="False"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          CanUserSortColumns="False"
+                                          HeadersVisibility="Column"
+                                          MinHeight="160"
+                                          Background="{DynamicResource MaterialDesign.Brush.Background}"
+                                          Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Selector"
+                                                            Width="*"
+                                                            ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                            EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+                                                            Binding="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="表示状態">
+                <Grid Margin="0,16,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="0"
+                               Text="ActiveLeftTabIndex"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,8" />
+                    <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Text="{Binding ActiveLeftTabIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             IsReadOnly="True"
+                             Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="2"
+                               Text="左ペインのアクティブタブ位置"
+                               VerticalAlignment="Center"
+                               Margin="16,0,0,8" />
+
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="0"
+                               Text="RightPaneSelectedTab"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,8" />
+                    <ComboBox Grid.Row="1"
+                              Grid.Column="1"
+                              ItemsSource="{Binding RightPaneSelectedTabOptions}"
+                              SelectedItem="{Binding RightPaneSelectedTab, Mode=TwoWay}"
+                              Margin="0,0,0,8" />
+                    <StackPanel Grid.Row="1"
+                                Grid.Column="2"
+                                Orientation="Horizontal"
+                                Margin="16,0,0,8">
+                        <CheckBox Content="IsDarkTheme"
+                                  IsThreeState="True"
+                                  IsChecked="{Binding UiStateIsDarkTheme, Mode=TwoWay}"
+                                  Margin="0,0,24,0" />
+                        <CheckBox Content="ExecuteAfterSend"
+                                  IsThreeState="True"
+                                  IsChecked="{Binding UiStateExecuteAfterSend, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="2"
+                              Grid.Column="0"
+                              Grid.ColumnSpan="3"
+                              ItemsSource="{Binding LeftPaneTabs}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserSortColumns="False"
+                              HeadersVisibility="Column"
+                              Margin="0,12,0,0"
+                              Background="{DynamicResource MaterialDesign.Brush.Background}"
+                              Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="SiteName"
+                                                Width="200"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                Binding="{Binding SiteName}" />
+                            <DataGridTextColumn Header="Url"
+                                                Width="*"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                Binding="{Binding Url}" />
+                            <DataGridTextColumn Header="DisplayName"
+                                                Width="220"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                Binding="{Binding DisplayName}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="2"
+              Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="{Binding StatusMessage}"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center"
+                       Margin="0,0,12,0" />
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal">
+                <Button Content="保存"
+                        Width="100"
+                        Command="{Binding SaveCommand}"
+                        Style="{StaticResource MaterialDesignPaperButton}"
+                        Margin="0,0,8,0" />
+                <Button Content="再読込"
+                        Width="100"
+                        Command="{Binding ReloadCommand}"
+                        Style="{StaticResource MaterialDesignPaperButton}"
+                        Margin="0,0,8,0" />
+                <Button Content="閉じる"
+                        Width="100"
+                        Command="{Binding CloseWindowCommand}"
+                        CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
+                        Style="{StaticResource MaterialDesignPaperButton}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

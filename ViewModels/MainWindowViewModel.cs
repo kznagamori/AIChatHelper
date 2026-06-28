@@ -44,6 +44,9 @@ public partial class MainWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private bool _isTemplateTreeLoading;
 
+	[ObservableProperty]
+	private string _rightPaneSelectedTab = "History";
+
 	// 表示モード（0=両方表示, 1=左のみ, 2=右のみ）
 	[ObservableProperty]
 	private int _displayMode = 0;
@@ -87,6 +90,8 @@ public partial class MainWindowViewModel : ObservableObject
 	private bool _insertTemplateTextOnClear = true;
 	private String _templateTextForEditor = String.Empty;
 
+	public event EventHandler? UiStateChanged;
+
 	// DI で IHistoryService を受け取るコンストラクタ
 	public MainWindowViewModel(Core.Factory.IWindowFactory windowFactory,
 		IHistoryService historyService,
@@ -104,7 +109,10 @@ public partial class MainWindowViewModel : ObservableObject
 
 		_insertTemplateTextOnClear = _config.Config.EditorSettings.InsertTemplateTextOnClear;
 		_templateTextForEditor = _config.Config.EditorSettings.TemplateTextForEditor;
-		ExecuteAfterSend = _config.Config.ExecuteAfterSendSettings?.DefaultEnabled ?? false;
+		ExecuteAfterSend = _config.Config.UiState?.ExecuteAfterSend
+			?? _config.Config.ExecuteAfterSendSettings?.DefaultEnabled
+			?? false;
+		RightPaneSelectedTab = NormalizeRightPaneSelectedTab(_config.Config.UiState?.RightPaneSelectedTab);
 
 		// アプリ起動時に履歴を読み込む
 		LoadHistories();
@@ -121,6 +129,29 @@ public partial class MainWindowViewModel : ObservableObject
 
 		_ = LoadTemplateTreeAsync();
 		ClearEditor();
+	}
+
+	partial void OnIsDarkThemeChanged(bool value)
+	{
+		UiStateChanged?.Invoke(this, EventArgs.Empty);
+	}
+
+	partial void OnExecuteAfterSendChanged(bool value)
+	{
+		UiStateChanged?.Invoke(this, EventArgs.Empty);
+	}
+
+	partial void OnRightPaneSelectedTabChanged(string value)
+	{
+		RightPaneSelectedTab = NormalizeRightPaneSelectedTab(value);
+		UiStateChanged?.Invoke(this, EventArgs.Empty);
+	}
+
+	private static string NormalizeRightPaneSelectedTab(string? value)
+	{
+		return string.Equals(value, "Template", StringComparison.OrdinalIgnoreCase)
+			? "Template"
+			: "History";
 	}
 
 	// 履歴データを読み込む
