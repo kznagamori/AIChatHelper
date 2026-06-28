@@ -34,3 +34,49 @@ TemplateTextForEditor = """
 [Config.TemplateSettings]
 # 相対パスの場合は実行フォルダー基準。絶対パス、ドライブパス、UNC パスも指定可能。
 TemplateDirectory = "template"
+
+[Config.ExecuteAfterSendSettings]
+# 送信後実行チェックボックスの初期状態
+DefaultEnabled = false
+# 実行ボタン探索の最大待ち時間
+ExecutionTimeoutMs = 3000
+# 入力反映後、実行ボタン探索を始めるまでの待ち時間
+PostInputDelayMs = 100
+# 実行ボタン探索のリトライ間隔
+RetryIntervalMs = 100
+# DOM解析ログをDebug出力するかどうか。入力本文は出力しない。
+EnableDomAnalysisLog = true
+# 未対応サービス時の動作: InputOnly または ShowWarning
+UnsupportedServiceBehavior = "InputOnly"
+
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "ChatGPT"
+UrlPatterns = ["chat.openai.com", "chatgpt.com"]
+SubmitButtonSelectors = [
+	'button[data-testid="send-button"]',
+	'button[data-testid="composer-submit-button"]',
+	'button[aria-label*="Send"]',
+	'button[aria-label*="送信"]',
+]
+KeyboardFallback = "None"
+
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "Gemini"
+UrlPatterns = ["gemini.google.com"]
+SubmitButtonSelectors = [
+	'button[aria-label*="Send"]',
+	'button[aria-label*="送信"]',
+	'button[data-test-id*="send"]',
+	'button:has(mat-icon)',
+]
+KeyboardFallback = "Enter"
+
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "Claude"
+UrlPatterns = ["claude.ai"]
+SubmitButtonSelectors = [
+	'button[aria-label*="Send"]',
+	'button[aria-label*="送信"]',
+	'button[data-testid*="send"]',
+]
+KeyboardFallback = "None"

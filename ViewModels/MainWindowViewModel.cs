@@ -104,6 +104,7 @@ public partial class MainWindowViewModel : ObservableObject
 
 		_insertTemplateTextOnClear = _config.Config.EditorSettings.InsertTemplateTextOnClear;
 		_templateTextForEditor = _config.Config.EditorSettings.TemplateTextForEditor;
+		ExecuteAfterSend = _config.Config.ExecuteAfterSendSettings?.DefaultEnabled ?? false;
 
 		// アプリ起動時に履歴を読み込む
 		LoadHistories();
@@ -534,6 +535,9 @@ public partial class MainWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private bool _isSending = false;
 
+	[ObservableProperty]
+	private bool _executeAfterSend = false;
+
 	// IsSendingの否定値を取得するプロパティ
 	public bool IsSendingNot => !IsSending;
 
@@ -541,15 +545,14 @@ public partial class MainWindowViewModel : ObservableObject
 	partial void OnIsSendingChanged(bool value)
 	{
 		OnPropertyChanged(nameof(IsSendingNot));
+		ChatToServiceCommand.NotifyCanExecuteChanged();
 	}
 
-	// Update the ChatToServiceCommand
 	[RelayCommand(CanExecute = nameof(CanSendChat))]
 	private async Task ChatToServiceAsync(object parameter)
 	{
 		try
 		{
-			// Set sending state
 			IsSending = true;
 			ChatButtonText = "送信中...";
 
@@ -567,100 +570,729 @@ public partial class MainWindowViewModel : ObservableObject
 
 			await webview.EnsureCoreWebView2Async();
 
-			// UIスレッドで作業を続行
-			var normalizedText = await Task.Run(() => EditorText.Replace("\r\n", "\n"));
-			// JSONのシリアライズを別スレッドで実行
-			string textJson = await Task.Run(() => JsonSerializer.Serialize(normalizedText));
-			string selectorsJson = await Task.Run(() => JsonSerializer.Serialize(_config.Config.InputSelectors));
-
-			// スクリプトの構築
-			var script = $@"(function(){{
-          const text      = {textJson};
-          const selectors = {selectorsJson};
-
-          let input = null;
-          for (const sel of selectors) {{
-            if (sel.startsWith('#')) {{
-              input = document.getElementById(sel.slice(1));
-            }} else {{
-              input = document.querySelector(sel);
-            }}
-            if (input) break;
-          }}
-
-          if (!input) {{
-            console.warn('▶ No chat input found');
-            return false;
-          }}
-
-          input.focus();
-          if (input.tagName === 'TEXTAREA') {{
-            input.value = text;
-            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-          }} else {{
-            document.execCommand('selectAll', false, null);
-            document.execCommand('insertText', false, text);
-            input.dispatchEvent(new InputEvent('input', {{ bubbles: true }}));
-          }}
-
-          return true;
-        }})();";
-
-			// UIスレッドでWebViewのスクリプト実行
-			var result = await webview.ExecuteScriptAsync(script);
-			Debug.WriteLine($"[ChatToService] inject result: {result}");
-
-			if (!string.IsNullOrWhiteSpace(normalizedText))
+			var normalizedText = await Task.Run(() => (EditorText ?? string.Empty).Replace("\r\n", "\n"));
+			ChatInputApplyResult inputResult;
+			try
 			{
-				// データベース操作を別スレッドで実行
-				bool needToReloadHistory = false;
+				inputResult = await ApplyTextToChatInputAsync(webview, normalizedText);
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine($"[ChatToService] 入力欄への反映中に例外が発生しました: {ex.Message}");
+				return;
+			}
 
-				await Task.Run(() =>
+			Debug.WriteLine($"[ChatToService] input result: inputFound={inputResult.InputFound}, textApplied={inputResult.TextApplied}, selector={inputResult.Selector}, isEmpty={inputResult.IsEmpty}, reason={inputResult.Reason}");
+
+			if (!inputResult.TextApplied)
+			{
+				Debug.WriteLine("[ChatToService] 入力欄への反映に失敗したため、履歴保存とエディタクリアを行いません。");
+				return;
+			}
+
+			if (ExecuteAfterSend && !inputResult.IsEmpty)
+			{
+				try
 				{
-					// 最新の履歴アイテムと比較
-					HistoryItem? latestItem = HistoryItems.Count > 0 ?
-						HistoryItems.OrderByDescending(h => h.CreatedAt).FirstOrDefault() : null;
-					if (latestItem == null || latestItem.Text != normalizedText)
-					{
-						// 最新エントリと異なる場合のみ追加
-						_historyService.AddHistory(normalizedText);
-						needToReloadHistory = true; // 履歴を再読み込みする必要あり
-					}
-				});
-
-				// 必要なら新しいアイテムだけを追加（全部を再ロードしない）
-				if (needToReloadHistory)
+					var executeResult = await TryExecuteAfterSendAsync(webview, inputResult);
+					var invalidSelectors = executeResult.InvalidSelectors.Count == 0
+						? string.Empty
+						: string.Join(", ", executeResult.InvalidSelectors);
+					Debug.WriteLine($"[ChatToService] execute result: executed={executeResult.Executed}, skipped={executeResult.Skipped}, service={executeResult.ServiceName}, method={executeResult.Method}, selector={executeResult.Selector}, invalidSelectors={invalidSelectors}, reason={executeResult.Reason}");
+				}
+				catch (Exception ex)
 				{
-					// 最新の1つだけを取得
-					var newItem = _historyService.GetHistoryRecords()
-						.OrderByDescending(h => h.CreatedAt)
-						.FirstOrDefault();
-
-					if (newItem != null && !HistoryItems.Any(h => h.Id == newItem.Id))
-					{
-						HistoryItems.Add(newItem);
-					}
-
-					// スクロールを最下部に移動
-					if (Application.Current.MainWindow is Views.MainWindow mainWindow)
-					{
-						var slackHistoryView = mainWindow.FindName("SlackHistoryView") as Core.Controls.SlackStyleHistoryView;
-						slackHistoryView?.ScrollToLatestHistory();
-					}
+					Debug.WriteLine($"[ChatToService] 送信後実行中に例外が発生しました。入力反映は成功しているため履歴保存とエディタクリアは継続します: {ex.Message}");
 				}
 			}
 
-			// エディタテキストをクリア
+			await SaveSentTextToHistoryAsync(normalizedText);
 			ClearEditor();
 		}
 		finally
 		{
-			// ボタンの状態をリセット
 			ChatButtonText = "チャットへ";
 			IsSending = false;
 		}
 	}
+
+	private async Task<ChatInputApplyResult> ApplyTextToChatInputAsync(WebView2 webview, string normalizedText)
+	{
+		string textJson = JsonSerializer.Serialize(normalizedText);
+		string selectorsJson = JsonSerializer.Serialize(_config.Config.InputSelectors ?? new List<string>());
+		var script = BuildApplyInputScript(textJson, selectorsJson);
+		var rawResult = await webview.ExecuteScriptAsync(script);
+		return DeserializeScriptResult<ChatInputApplyResult>(rawResult)
+			?? ChatInputApplyResult.Failed(string.IsNullOrWhiteSpace(normalizedText), "Input script returned no result.");
+	}
+
+	private async Task<ChatExecuteResult> TryExecuteAfterSendAsync(WebView2 webview, ChatInputApplyResult inputResult)
+	{
+		var settings = _config.Config.ExecuteAfterSendSettings ?? new ExecuteAfterSendSettings();
+		var executor = FindServiceExecutor(webview);
+		if (executor == null)
+		{
+			var behavior = NormalizeUnsupportedServiceBehavior(settings.UnsupportedServiceBehavior);
+			if (behavior == "ShowWarning")
+			{
+				MessageBox.Show("このチャットサービスは送信後実行に対応していません。入力のみ完了しました。", "送信後実行", MessageBoxButton.OK, MessageBoxImage.Information);
+			}
+
+			return ChatExecuteResult.InputOnly("対応するサービス設定が見つかりません。");
+		}
+
+		var postInputDelayMs = Math.Max(0, settings.PostInputDelayMs);
+		if (postInputDelayMs > 0)
+		{
+			await Task.Delay(postInputDelayMs);
+		}
+
+		if (settings.EnableDomAnalysisLog)
+		{
+			await LogDomAnalysisAsync(webview, executor.ServiceName);
+		}
+
+		var timeoutMs = NormalizePositive(settings.ExecutionTimeoutMs, 3000);
+		var retryIntervalMs = NormalizePositive(settings.RetryIntervalMs, 100);
+		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+		ChatExecuteResult lastResult = ChatExecuteResult.Failed(executor.ServiceName, "実行ボタンが見つかりません。");
+
+		do
+		{
+			lastResult = await TryClickSubmitButtonAsync(webview, executor, inputResult.Selector);
+			if (lastResult.Executed)
+			{
+				return lastResult;
+			}
+
+			if (DateTime.UtcNow < deadline)
+			{
+				await Task.Delay(retryIntervalMs);
+			}
+		}
+		while (DateTime.UtcNow < deadline);
+
+		var fallback = NormalizeKeyboardFallback(executor.KeyboardFallback);
+		if (fallback != "None")
+		{
+			var fallbackResult = await TryKeyboardFallbackAsync(webview, executor, inputResult.Selector, fallback);
+			if (fallbackResult.Executed)
+			{
+				return fallbackResult;
+			}
+
+			lastResult = fallbackResult;
+		}
+
+		return lastResult;
+	}
+
+	private async Task SaveSentTextToHistoryAsync(string normalizedText)
+	{
+		if (string.IsNullOrWhiteSpace(normalizedText))
+		{
+			return;
+		}
+
+		bool needToReloadHistory = false;
+		var latestText = HistoryItems.Count > 0
+			? HistoryItems.OrderByDescending(h => h.CreatedAt).FirstOrDefault()?.Text
+			: null;
+
+		await Task.Run(() =>
+		{
+			if (latestText != normalizedText)
+			{
+				_historyService.AddHistory(normalizedText);
+				needToReloadHistory = true;
+			}
+		});
+
+		if (!needToReloadHistory)
+		{
+			return;
+		}
+
+		var newItem = _historyService.GetHistoryRecords()
+			.OrderByDescending(h => h.CreatedAt)
+			.FirstOrDefault();
+
+		if (newItem != null && !HistoryItems.Any(h => h.Id == newItem.Id))
+		{
+			HistoryItems.Add(newItem);
+		}
+
+		if (Application.Current.MainWindow is Views.MainWindow mainWindow)
+		{
+			var slackHistoryView = mainWindow.FindName("SlackHistoryView") as Core.Controls.SlackStyleHistoryView;
+			slackHistoryView?.ScrollToLatestHistory();
+		}
+	}
+
+	private ServiceExecutorSettings? FindServiceExecutor(WebView2 webview)
+	{
+		var source = GetWebViewSource(webview);
+		if (string.IsNullOrWhiteSpace(source))
+		{
+			return null;
+		}
+
+		foreach (var executor in GetServiceExecutors())
+		{
+			if (executor.UrlPatterns.Any(pattern =>
+				!string.IsNullOrWhiteSpace(pattern) &&
+				source.Contains(pattern, StringComparison.OrdinalIgnoreCase)))
+			{
+				return executor;
+			}
+		}
+
+		return null;
+	}
+
+	private IReadOnlyList<ServiceExecutorSettings> GetServiceExecutors()
+	{
+		var executors = _config.Config.ExecuteAfterSendSettings?.ServiceExecutors;
+		return executors is { Count: > 0 } ? executors : DefaultServiceExecutors;
+	}
+
+	private static string GetWebViewSource(WebView2 webview)
+	{
+		var coreSource = webview.CoreWebView2?.Source;
+		if (!string.IsNullOrWhiteSpace(coreSource))
+		{
+			return coreSource;
+		}
+
+		return webview.Source?.ToString() ?? string.Empty;
+	}
+
+	private async Task LogDomAnalysisAsync(WebView2 webview, string serviceName)
+	{
+		try
+		{
+			var rawResult = await webview.ExecuteScriptAsync(BuildDomAnalysisScript());
+			Debug.WriteLine($"[ExecuteAfterSend][DOM][{serviceName}] {rawResult}");
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"[ExecuteAfterSend][DOM][{serviceName}] DOM解析ログの取得に失敗しました: {ex.Message}");
+		}
+	}
+
+	private async Task<ChatExecuteResult> TryClickSubmitButtonAsync(WebView2 webview, ServiceExecutorSettings executor, string inputSelector)
+	{
+		string selectorsJson = JsonSerializer.Serialize(executor.SubmitButtonSelectors ?? new List<string>());
+		string inputSelectorJson = JsonSerializer.Serialize(inputSelector ?? string.Empty);
+		var script = BuildClickSubmitButtonScript(selectorsJson, inputSelectorJson);
+		var rawResult = await webview.ExecuteScriptAsync(script);
+		var result = DeserializeScriptResult<ChatExecuteResult>(rawResult)
+			?? ChatExecuteResult.Failed(executor.ServiceName, "Click script returned no result.");
+		result.ServiceName = executor.ServiceName;
+		return result;
+	}
+
+	private async Task<ChatExecuteResult> TryKeyboardFallbackAsync(WebView2 webview, ServiceExecutorSettings executor, string inputSelector, string fallback)
+	{
+		string inputSelectorJson = JsonSerializer.Serialize(inputSelector ?? string.Empty);
+		string fallbackJson = JsonSerializer.Serialize(fallback);
+		var script = BuildKeyboardFallbackScript(inputSelectorJson, fallbackJson);
+		var rawResult = await webview.ExecuteScriptAsync(script);
+		var result = DeserializeScriptResult<ChatExecuteResult>(rawResult)
+			?? ChatExecuteResult.Failed(executor.ServiceName, "Keyboard fallback script returned no result.");
+		result.ServiceName = executor.ServiceName;
+		return result;
+	}
+
+	private static T? DeserializeScriptResult<T>(string? rawResult)
+	{
+		if (string.IsNullOrWhiteSpace(rawResult) || rawResult == "null")
+		{
+			return default;
+		}
+
+		try
+		{
+			return JsonSerializer.Deserialize<T>(rawResult, ScriptJsonOptions);
+		}
+		catch (JsonException)
+		{
+			try
+			{
+				var json = JsonSerializer.Deserialize<string>(rawResult);
+				return string.IsNullOrWhiteSpace(json)
+					? default
+					: JsonSerializer.Deserialize<T>(json, ScriptJsonOptions);
+			}
+			catch (JsonException)
+			{
+				return default;
+			}
+		}
+	}
+
+	private static string BuildApplyInputScript(string textJson, string selectorsJson)
+	{
+		return """
+(function() {
+  const text = __TEXT_JSON__;
+  const selectors = Array.isArray(__SELECTORS_JSON__) ? __SELECTORS_JSON__ : [];
+  const result = {
+    inputFound: false,
+    textApplied: false,
+    selector: "",
+    isEmpty: String(text).trim().length === 0,
+    reason: ""
+  };
+
+  let input = null;
+  for (const selector of selectors) {
+    if (typeof selector !== "string" || selector.trim() === "") {
+      continue;
+    }
+
+    try {
+      input = document.querySelector(selector);
+    } catch (_) {
+      continue;
+    }
+
+    if (input) {
+      result.inputFound = true;
+      result.selector = selector;
+      break;
+    }
+  }
+
+  if (!input) {
+    result.reason = "Input element was not found.";
+    return result;
+  }
+
+  try {
+    input.focus();
+    const tagName = (input.tagName || "").toUpperCase();
+
+    if (tagName === "TEXTAREA" || tagName === "INPUT") {
+      const prototype = tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+      const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+      if (valueSetter) {
+        valueSetter.call(input, text);
+      } else {
+        input.value = text;
+      }
+
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    } else if (input.isContentEditable || input.getAttribute("contenteditable") === "true") {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      const inserted = document.execCommand("insertText", false, text);
+      if (!inserted) {
+        input.textContent = text;
+      }
+
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    } else {
+      result.reason = "Unsupported input element type.";
+      return result;
+    }
+
+    result.textApplied = true;
+    result.reason = "OK";
+    return result;
+  } catch (error) {
+    result.reason = error && error.message ? error.message : "Input application failed.";
+    return result;
+  }
+})();
+""".Replace("__TEXT_JSON__", textJson).Replace("__SELECTORS_JSON__", selectorsJson);
+	}
+
+	private static string BuildClickSubmitButtonScript(string selectorsJson, string inputSelectorJson)
+	{
+		return """
+(function() {
+  const selectors = Array.isArray(__SELECTORS_JSON__) ? __SELECTORS_JSON__ : [];
+  const inputSelector = __INPUT_SELECTOR_JSON__;
+  const result = {
+    executed: false,
+    skipped: false,
+    serviceName: "",
+    method: "click",
+    selector: "",
+    reason: "",
+    invalidSelectors: []
+  };
+
+  function textOf(value) {
+    return String(value || "").trim();
+  }
+
+  function lower(value) {
+    return textOf(value).toLowerCase();
+  }
+
+  function isVisible(element) {
+    const style = window.getComputedStyle(element);
+    if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) {
+      return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function isDisabled(element) {
+    return element.disabled === true ||
+      element.getAttribute("aria-disabled") === "true" ||
+      element.getAttribute("disabled") !== null;
+  }
+
+  function findInput() {
+    if (!inputSelector) {
+      return null;
+    }
+
+    try {
+      return document.querySelector(inputSelector);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function scoreCandidate(element, input) {
+    let score = 0;
+    const aria = lower(element.getAttribute("aria-label"));
+    const title = lower(element.getAttribute("title"));
+    const dataTestId = lower(element.getAttribute("data-testid") || element.getAttribute("data-test-id"));
+    const type = lower(element.getAttribute("type"));
+    const text = lower(element.innerText).slice(0, 80);
+
+    if (dataTestId.includes("send") || dataTestId.includes("submit")) score += 100;
+    if (aria.includes("send") || aria.includes("送信")) score += 90;
+    if (title.includes("send") || title.includes("送信")) score += 70;
+    if (type === "submit") score += 60;
+    if (text === "send" || text === "送信") score += 50;
+
+    if (input) {
+      const form = input.closest("form");
+      if (form && form.contains(element)) {
+        score += 50;
+      }
+
+      const inputRect = input.getBoundingClientRect();
+      const buttonRect = element.getBoundingClientRect();
+      const distance = Math.abs(buttonRect.left - inputRect.right) + Math.abs(buttonRect.top - inputRect.top);
+      score += Math.max(0, 40 - Math.min(40, distance / 20));
+    }
+
+    return score;
+  }
+
+  const input = findInput();
+  const candidates = [];
+  const seen = new Set();
+
+  for (const selector of selectors) {
+    if (typeof selector !== "string" || selector.trim() === "") {
+      continue;
+    }
+
+    let elements = [];
+    try {
+      elements = Array.from(document.querySelectorAll(selector));
+    } catch (error) {
+      result.invalidSelectors.push(selector);
+      continue;
+    }
+
+    for (const element of elements) {
+      if (!element || seen.has(element) || !isVisible(element) || isDisabled(element)) {
+        continue;
+      }
+
+      seen.add(element);
+      candidates.push({
+        element: element,
+        selector: selector,
+        score: scoreCandidate(element, input)
+      });
+    }
+  }
+
+  if (candidates.length === 0) {
+    result.reason = "No enabled submit candidate found.";
+    return result;
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  const candidate = candidates[0];
+
+  try {
+    candidate.element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    try {
+      candidate.element.focus({ preventScroll: true });
+    } catch (_) {
+      candidate.element.focus();
+    }
+
+    candidate.element.click();
+    result.executed = true;
+    result.selector = candidate.selector;
+    result.reason = "Clicked submit candidate.";
+    return result;
+  } catch (error) {
+    result.reason = error && error.message ? error.message : "Click failed.";
+    return result;
+  }
+})();
+""".Replace("__SELECTORS_JSON__", selectorsJson).Replace("__INPUT_SELECTOR_JSON__", inputSelectorJson);
+	}
+
+	private static string BuildKeyboardFallbackScript(string inputSelectorJson, string fallbackJson)
+	{
+		return """
+(function() {
+  const inputSelector = __INPUT_SELECTOR_JSON__;
+  const fallback = __FALLBACK_JSON__;
+  const result = {
+    executed: false,
+    skipped: false,
+    serviceName: "",
+    method: fallback,
+    selector: inputSelector || "",
+    reason: "",
+    invalidSelectors: []
+  };
+
+  let input = null;
+  if (inputSelector) {
+    try {
+      input = document.querySelector(inputSelector);
+    } catch (_) {
+      input = null;
+    }
+  }
+
+  if (!input) {
+    result.reason = "Keyboard fallback target was not found.";
+    return result;
+  }
+
+  try {
+    input.focus();
+    const eventInit = {
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: fallback === "CtrlEnter"
+    };
+
+    input.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+    input.dispatchEvent(new KeyboardEvent("keypress", eventInit));
+    input.dispatchEvent(new KeyboardEvent("keyup", eventInit));
+    result.executed = true;
+    result.reason = "Keyboard fallback dispatched.";
+    return result;
+  } catch (error) {
+    result.reason = error && error.message ? error.message : "Keyboard fallback failed.";
+    return result;
+  }
+})();
+""".Replace("__INPUT_SELECTOR_JSON__", inputSelectorJson).Replace("__FALLBACK_JSON__", fallbackJson);
+	}
+
+	private static string BuildDomAnalysisScript()
+	{
+		return """
+(function() {
+  function trim(value, maxLength = 80) {
+    const text = String(value || "").trim();
+    return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
+  }
+
+  function isVisible(element) {
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.visibility !== "hidden" &&
+      style.display !== "none" &&
+      Number(style.opacity) !== 0 &&
+      rect.width > 0 &&
+      rect.height > 0;
+  }
+
+  function describe(element, includeButtonText) {
+    if (!element) {
+      return null;
+    }
+
+    const description = {
+      tagName: trim(element.tagName),
+      id: trim(element.id),
+      className: trim(element.className),
+      role: trim(element.getAttribute("role")),
+      type: trim(element.getAttribute("type")),
+      ariaLabel: trim(element.getAttribute("aria-label")),
+      title: trim(element.getAttribute("title")),
+      dataTestId: trim(element.getAttribute("data-testid") || element.getAttribute("data-test-id")),
+      disabled: element.disabled === true || element.getAttribute("disabled") !== null,
+      ariaDisabled: trim(element.getAttribute("aria-disabled")),
+      visible: isVisible(element)
+    };
+
+    if (includeButtonText) {
+      description.innerText = trim(element.innerText);
+    }
+
+    return description;
+  }
+
+  return {
+    href: trim(location.href, 160),
+    title: trim(document.title, 120),
+    activeElement: describe(document.activeElement, false),
+    buttons: Array.from(document.querySelectorAll("button,[role='button']"))
+      .slice(0, 80)
+      .map(element => describe(element, true)),
+    inputs: Array.from(document.querySelectorAll("textarea,input,[contenteditable='true']"))
+      .slice(0, 40)
+      .map(element => describe(element, false))
+  };
+})();
+""";
+	}
+
+	private static int NormalizePositive(int value, int fallback)
+	{
+		return value > 0 ? value : fallback;
+	}
+
+	private static string NormalizeUnsupportedServiceBehavior(string? behavior)
+	{
+		return string.Equals(behavior, "ShowWarning", StringComparison.OrdinalIgnoreCase)
+			? "ShowWarning"
+			: "InputOnly";
+	}
+
+	private static string NormalizeKeyboardFallback(string? fallback)
+	{
+		if (string.Equals(fallback, "Enter", StringComparison.OrdinalIgnoreCase))
+		{
+			return "Enter";
+		}
+
+		if (string.Equals(fallback, "CtrlEnter", StringComparison.OrdinalIgnoreCase))
+		{
+			return "CtrlEnter";
+		}
+
+		return "None";
+	}
+
+	private static readonly JsonSerializerOptions ScriptJsonOptions = new()
+	{
+		PropertyNameCaseInsensitive = true
+	};
+
+	private static readonly IReadOnlyList<ServiceExecutorSettings> DefaultServiceExecutors = new List<ServiceExecutorSettings>
+	{
+		new()
+		{
+			ServiceName = "ChatGPT",
+			UrlPatterns = new List<string> { "chat.openai.com", "chatgpt.com" },
+			SubmitButtonSelectors = new List<string>
+			{
+				"button[data-testid=\"send-button\"]",
+				"button[data-testid=\"composer-submit-button\"]",
+				"button[aria-label*=\"Send\"]",
+				"button[aria-label*=\"送信\"]"
+			},
+			KeyboardFallback = "None"
+		},
+		new()
+		{
+			ServiceName = "Gemini",
+			UrlPatterns = new List<string> { "gemini.google.com" },
+			SubmitButtonSelectors = new List<string>
+			{
+				"button[aria-label*=\"Send\"]",
+				"button[aria-label*=\"送信\"]",
+				"button[data-test-id*=\"send\"]",
+				"button:has(mat-icon)"
+			},
+			KeyboardFallback = "Enter"
+		},
+		new()
+		{
+			ServiceName = "Claude",
+			UrlPatterns = new List<string> { "claude.ai" },
+			SubmitButtonSelectors = new List<string>
+			{
+				"button[aria-label*=\"Send\"]",
+				"button[aria-label*=\"送信\"]",
+				"button[data-testid*=\"send\"]"
+			},
+			KeyboardFallback = "None"
+		}
+	};
+
+	private sealed class ChatInputApplyResult
+	{
+		public bool InputFound { get; set; }
+		public bool TextApplied { get; set; }
+		public string Selector { get; set; } = string.Empty;
+		public bool IsEmpty { get; set; }
+		public string Reason { get; set; } = string.Empty;
+
+		public static ChatInputApplyResult Failed(bool isEmpty, string reason)
+		{
+			return new ChatInputApplyResult
+			{
+				IsEmpty = isEmpty,
+				Reason = reason
+			};
+		}
+	}
+
+	private sealed class ChatExecuteResult
+	{
+		public bool Executed { get; set; }
+		public bool Skipped { get; set; }
+		public string ServiceName { get; set; } = string.Empty;
+		public string Method { get; set; } = "None";
+		public string Selector { get; set; } = string.Empty;
+		public string Reason { get; set; } = string.Empty;
+		public List<string> InvalidSelectors { get; set; } = new List<string>();
+
+		public static ChatExecuteResult InputOnly(string reason)
+		{
+			return new ChatExecuteResult
+			{
+				Skipped = true,
+				Method = "InputOnly",
+				Reason = reason
+			};
+		}
+
+		public static ChatExecuteResult Failed(string serviceName, string reason)
+		{
+			return new ChatExecuteResult
+			{
+				ServiceName = serviceName,
+				Reason = reason
+			};
+		}
+	}
+
 	// ボタンがクリック可能かを制御するメソッド
 	private bool CanSendChat() => !IsSending;
 

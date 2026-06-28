@@ -402,6 +402,12 @@
                     <StackPanel DockPanel.Dock="Right"
                                 Orientation="Horizontal"
                                 Margin="0,0,8,0">
+                        <CheckBox Content="送信後実行"
+                                  IsChecked="{Binding ExecuteAfterSend, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsSendingNot}"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,12,0"
+                                  ToolTip="チェック時は、入力後にサービス側の実行ボタンも押します" />
                         <Button Content="{Binding ChatButtonText}"
                             Width="120"
                             Command="{Binding ChatToServiceCommand}"
