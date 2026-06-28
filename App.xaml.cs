@@ -78,6 +78,8 @@ public partial class App : Application
 		services.AddTransient<ViewModels.HistoryManagementWindowViewModel>();
 		services.AddTransient<Views.InformationWindow>();
 		services.AddTransient<ViewModels.InformationWindowViewModel>();
+		services.AddTransient<Views.SettingsWindow>();
+		services.AddTransient<ViewModels.SettingsWindowViewModel>();
 		// 他のサービスやウィンドウもここに登録
 	}
 }

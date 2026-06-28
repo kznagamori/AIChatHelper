@@ -10,10 +10,6 @@ Url = "https://gemini.google.com/app?hl=ja"
 Name = "Claude"
 Url = "https://claude.ai/new"
 
-[[ChatSites]]
-Name = "Copilot"
-Url = "https://copilot.microsoft.com/"
-
 [Config]
 # テキスト入力欄の検索条件（優先度が上の順に並べる）
 InputSelectors = [
@@ -34,3 +30,74 @@ InsertTemplateTextOnClear = false
 TemplateTextForEditor = """
 
 """
+
+[Config.TemplateSettings]
+# 相対パスの場合は実行フォルダー基準。絶対パス、ドライブパス、UNC パスも指定可能。
+TemplateDirectory = "template"
+
+[Config.ExecuteAfterSendSettings]
+# 送信後実行チェックボックスの初期状態
+DefaultEnabled = false
+# 実行ボタン探索の最大待ち時間
+ExecutionTimeoutMs = 3000
+# 入力反映後、実行ボタン探索を始めるまでの待ち時間
+PostInputDelayMs = 100
+# 実行ボタン探索のリトライ間隔
+RetryIntervalMs = 100
+# DOM解析ログをDebug出力するかどうか。入力本文は出力しない。
+EnableDomAnalysisLog = true
+# 未対応サービス時の動作: InputOnly または ShowWarning
+UnsupportedServiceBehavior = "InputOnly"
+
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "ChatGPT"
+UrlPatterns = ["chat.openai.com", "chatgpt.com"]
+SubmitButtonSelectors = [
+	'button[data-testid="send-button"]',
+	'button[data-testid="composer-submit-button"]',
+	'button[aria-label*="Send"]',
+	'button[aria-label*="送信"]',
+]
+KeyboardFallback = "None"
+
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "Gemini"
+UrlPatterns = ["gemini.google.com"]
+SubmitButtonSelectors = [
+	'button[aria-label*="Send"]',
+	'button[aria-label*="送信"]',
+	'button[data-test-id*="send"]',
+	'button:has(mat-icon)',
+]
+KeyboardFallback = "Enter"
+
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "Claude"
+UrlPatterns = ["claude.ai"]
+SubmitButtonSelectors = [
+	'button[aria-label*="Send"]',
+	'button[aria-label*="送信"]',
+	'button[data-testid*="send"]',
+]
+KeyboardFallback = "None"
+
+[Config.UiState]
+# アプリが最後に保存した左ペインのアクティブタブ位置。範囲外の場合は 0 に丸める。
+ActiveLeftTabIndex = 0
+
+# アプリ全体のペイン表示。TwoPane, LeftPane, RightPane のいずれか。
+PaneDisplayMode = "TwoPane"
+
+# 右ペインの選択タブ。History または Template。
+RightPaneSelectedTab = "History"
+
+# アプリケーションウィンドウの幅と高さ
+WindowWidth = 1600
+WindowHeight = 800
+
+# アプリケーションウィンドウの左位置と上位置。RestoreWindowPosition が true の場合だけ復元に使う。
+WindowLeft = 100
+WindowTop = 100
+
+# true: 保存した WindowLeft / WindowTop を起動時に復元する
+RestoreWindowPosition = false
