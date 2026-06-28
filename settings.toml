@@ -30,3 +30,7 @@ InsertTemplateTextOnClear = false
 TemplateTextForEditor = """
 
 """
+
+[Config.TemplateSettings]
+# 相対パスの場合は実行フォルダー基準。絶対パス、ドライブパス、UNC パスも指定可能。
+TemplateDirectory = "template"

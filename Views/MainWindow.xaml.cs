@@ -31,8 +31,6 @@ public partial class MainWindow : Window
 	private readonly Dictionary<TabItem, ChatTabViewState> _chatTabStatesByItem = new();
 	private Grid? _mainGrid;
 	private AvalonTextEditor? _avalonEditor;
-	private Image? _templateImage;
-	private Image? _historyImage;
 	private ChatTabViewState? _activeChatTabState;
 	private bool _isEqualContentDisplayMode;
 	private bool _isUpdatingSelection;
@@ -105,10 +103,6 @@ public partial class MainWindow : Window
 
 		// AvalonEditorの参照を取得
 		_avalonEditor = FindName("AvalonEditor") as AvalonTextEditor;
-
-		// アイコン画像の参照を取得
-		_templateImage = FindName("TemplateImage") as Image;
-		_historyImage = FindName("HistoryImage") as Image;
 
 		// テーマに合わせてAvalonEditorのテーマも設定
 		_avalonEditor?.ApplyTheme(isDarkMode);
@@ -857,6 +851,70 @@ public partial class MainWindow : Window
 				}
 			}
 		}
+	}
+
+	private void TemplateTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+	{
+		if (DataContext is ViewModels.MainWindowViewModel viewModel)
+		{
+			viewModel.SelectedTemplateNode = e.NewValue as TemplateTreeNode;
+		}
+	}
+
+	private void TemplateTreeView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+	{
+		if (DataContext is not ViewModels.MainWindowViewModel viewModel)
+		{
+			return;
+		}
+
+		var treeViewItem = FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject);
+		if (treeViewItem?.DataContext is not TemplateTreeNode node || node.IsDirectory)
+		{
+			return;
+		}
+
+		if (viewModel.ApplyTemplateNodeCommand.CanExecute(node))
+		{
+			viewModel.ApplyTemplateNodeCommand.Execute(node);
+			e.Handled = true;
+		}
+	}
+
+	private void TemplateTreeView_KeyDown(object sender, KeyEventArgs e)
+	{
+		if (e.Key != Key.Enter || DataContext is not ViewModels.MainWindowViewModel viewModel)
+		{
+			return;
+		}
+
+		var node = viewModel.SelectedTemplateNode;
+		if (node == null || node.IsDirectory)
+		{
+			return;
+		}
+
+		if (viewModel.ApplyTemplateNodeCommand.CanExecute(node))
+		{
+			viewModel.ApplyTemplateNodeCommand.Execute(node);
+			e.Handled = true;
+		}
+	}
+
+	private static T? FindAncestor<T>(DependencyObject? current)
+		where T : DependencyObject
+	{
+		while (current != null)
+		{
+			if (current is T target)
+			{
+				return target;
+			}
+
+			current = VisualTreeHelper.GetParent(current);
+		}
+
+		return null;
 	}
 
 	private void GridSplitter_DragCompleted(object sender, DragCompletedEventArgs e)

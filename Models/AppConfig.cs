@@ -18,6 +18,14 @@ public class Config
 	public List<string> InputSelectors { get; set; } = new List<string>();
 	// エディタの確認ダイアログに関する設定
 	public EditorSettings EditorSettings { get; set; } = new EditorSettings();
+	// テンプレート表示に関する設定
+	public TemplateSettings TemplateSettings { get; set; } = new TemplateSettings();
+}
+
+public class TemplateSettings
+{
+	// テンプレートツリーで参照するディレクトリ
+	public string TemplateDirectory { get; set; } = "template";
 }
 
 // エディタ設定クラスを新規作成

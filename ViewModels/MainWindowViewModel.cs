@@ -22,19 +22,27 @@ public partial class MainWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private string _editorText = string.Empty;
 
-	// テンプレート一覧
-	public ObservableCollection<string> Templates { get; } = new();
-
 	// 履歴アイテムコレクション（DataGrid用）
 	public ObservableCollection<HistoryItem> HistoryItems { get; } = new();
+
+	// テンプレートツリー
+	public ObservableCollection<TemplateTreeNode> TemplateTreeNodes { get; } = new();
 
 	// 選択中の履歴アイテム
 	[ObservableProperty]
 	private HistoryItem? _selectedHistoryItem;
 
-	// 選択中テンプレート
+	// 選択中テンプレートノード
 	[ObservableProperty]
-	private string _selectedTemplate = string.Empty;
+	private TemplateTreeNode? _selectedTemplateNode;
+
+	// テンプレートツリーの読み込みエラー
+	[ObservableProperty]
+	private string? _templateLoadErrorMessage;
+
+	// テンプレートツリー読み込み中フラグ
+	[ObservableProperty]
+	private bool _isTemplateTreeLoading;
 
 	// 表示モード（0=両方表示, 1=左のみ, 2=右のみ）
 	[ObservableProperty]
@@ -110,11 +118,7 @@ public partial class MainWindowViewModel : ObservableObject
 			}
 		}, System.Windows.Threading.DispatcherPriority.Loaded);
 
-		// 起動時にテンプレート一覧をロード
-		foreach (var t in _templateService.GetTemplateFileNames())
-		{
-			Templates.Add(t);
-		}
+		_ = LoadTemplateTreeAsync();
 		ClearEditor();
 	}
 
@@ -134,53 +138,83 @@ public partial class MainWindowViewModel : ObservableObject
 		}
 	}
 
-	// テンプレート選択時にファイル内容をロード
-	partial void OnSelectedTemplateChanged(string value)
+	[RelayCommand]
+	private async Task LoadTemplateTreeAsync()
 	{
-		if (!string.IsNullOrEmpty(value))
+		IsTemplateTreeLoading = true;
+		TemplateLoadErrorMessage = null;
+
+		try
 		{
-			ApplyTemplate(value);
+			var ownerWindowHandle = GetMainWindowHandle();
+			var nodes = await Task.Run(() => _templateService.GetTemplateTree(ownerWindowHandle));
+
+			TemplateTreeNodes.Clear();
+			foreach (var node in nodes)
+			{
+				TemplateTreeNodes.Add(node);
+			}
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"テンプレートツリーの読み込みに失敗しました: {ex}");
+			TemplateTreeNodes.Clear();
+			TemplateLoadErrorMessage = $"テンプレートディレクトリを開けません。\n{_templateService.GetResolvedTemplateDirectory()}";
+		}
+		finally
+		{
+			IsTemplateTreeLoading = false;
 		}
 	}
 
-	// テンプレートをエディタに適用する処理
-	private void ApplyTemplate(string templateName)
+	[RelayCommand]
+	private void ApplyTemplateNode(TemplateTreeNode? node)
 	{
-		string templateContent = _templateService.LoadTemplate(templateName);
+		node ??= SelectedTemplateNode;
+		if (node == null || node.IsDirectory)
+		{
+			return;
+		}
 
+		try
+		{
+			var templateContent = _templateService.LoadTemplateByPath(node.FullPath);
+			ApplyTemplateContent(node.Name, templateContent);
+			TemplateLoadErrorMessage = null;
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"テンプレートファイルの読み込みに失敗しました: {ex}");
+			TemplateLoadErrorMessage = $"テンプレートファイルを読み込めません。\n{node.FullPath}";
+		}
+	}
 
+	private void ApplyTemplateContent(string templateName, string templateContent)
+	{
 		bool showDialog = true;
 
-		if (_confirmHistoryOverwrite)
+		if (_confirmTemplateOverwrite)
 		{
 			if (string.IsNullOrEmpty(EditorText))
 			{
-				// エディタが空の場合は確認不要
 				showDialog = false;
 			}
-			if (_insertTemplateTextOnClear)
+			if (_insertTemplateTextOnClear && string.Equals(_templateTextForEditor, EditorText))
 			{
-				if (string.Equals(_templateTextForEditor, EditorText))
-				{
-					// クリア用テンプレートテキストと選択履歴が同じ場合は確認不要
-					showDialog = false;
-				}
+				showDialog = false;
 			}
 			if (string.Equals(EditorText, templateContent))
 			{
-				showDialog = false; // テンプレートと同じ場合は確認不要
+				showDialog = false;
 			}
 		}
 		else
 		{
-			// 確認ダイアログを表示しない設定の場合は常に適用
 			showDialog = false;
 		}
 
-
 		if (showDialog)
 		{
-			// 確認ダイアログを表示
 			MessageBoxResult result = MessageBox.Show(
 				$"現在のエディタの内容を破棄して、テンプレート「{templateName}」を適用しますか？",
 				"確認",
@@ -193,8 +227,17 @@ public partial class MainWindowViewModel : ObservableObject
 			}
 		}
 
-		// テンプレートを適用し、最後に確認したテンプレートとして記録
 		EditorText = templateContent;
+	}
+
+	private static IntPtr GetMainWindowHandle()
+	{
+		if (Application.Current.MainWindow == null)
+		{
+			return IntPtr.Zero;
+		}
+
+		return new System.Windows.Interop.WindowInteropHelper(Application.Current.MainWindow).Handle;
 	}
 
 	// SelectedHistoryItem が変更された時の処理
@@ -215,35 +258,6 @@ public partial class MainWindowViewModel : ObservableObject
 	partial void OnEditorTextChanged(string value)
 	{
 		EditorTextChanged?.Invoke(this, value);
-	}
-
-	[RelayCommand]
-	private void OpenTemplateFolder()
-	{
-		var exeDir = AppDomain.CurrentDomain.BaseDirectory;
-		var templateDir = Path.Combine(exeDir, "template");
-		if (!Directory.Exists(templateDir))
-		{
-			Directory.CreateDirectory(templateDir);
-		}
-		Process.Start(new ProcessStartInfo("explorer.exe", $"\"{templateDir}\"") { UseShellExecute = true });
-
-		// 起動時にテンプレート一覧をロード
-		_templateService.RebuildTemplateMap();
-		Templates.Clear();
-		foreach (var t in _templateService.GetTemplateFileNames())
-		{
-			Templates.Add(t);
-		}
-	}
-
-	[RelayCommand]
-	private void TemplateDropDownClosed(string value)
-	{
-		if (!string.IsNullOrEmpty(value))
-		{
-			ApplyTemplate(value);
-		}
 	}
 
 	[RelayCommand]
@@ -476,6 +490,8 @@ public partial class MainWindowViewModel : ObservableObject
 	{
 		if (!string.IsNullOrWhiteSpace(EditorText))
 		{
+			var templateDirectory = _templateService.GetResolvedTemplateDirectory();
+
 			// ファイル保存ダイアログを表示
 			var saveFileDialog = new SaveFileDialog()
 			{
@@ -484,7 +500,9 @@ public partial class MainWindowViewModel : ObservableObject
 				AddExtension = true,
 				OverwritePrompt = true,
 				CreatePrompt = false,
-				InitialDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "template"),
+				InitialDirectory = Directory.Exists(templateDirectory)
+					? templateDirectory
+					: AppDomain.CurrentDomain.BaseDirectory,
 				FileName = $"{DateTime.Now:yyyyMMdd_HHmmss}.txt"
 			};
 			if (saveFileDialog.ShowDialog() != true)
@@ -498,13 +516,8 @@ public partial class MainWindowViewModel : ObservableObject
 			{
 				File.WriteAllText(filePath, EditorText);
 
-				// テンプレート一覧を更新
-				_templateService.RebuildTemplateMap();
-				Templates.Clear();
-				foreach (var t in _templateService.GetTemplateFileNames())
-				{
-					Templates.Add(t);
-				}
+				// テンプレートツリーを更新
+				_ = LoadTemplateTreeAsync();
 			}
 			catch (Exception ex)
 			{
