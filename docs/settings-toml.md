@@ -199,7 +199,13 @@ KeyboardFallback = "None"
 ```toml
 [Config.UiState]
 ActiveLeftTabIndex = 0
+PaneDisplayMode = "TwoPane"
 RightPaneSelectedTab = "History"
+WindowWidth = 1600
+WindowHeight = 800
+WindowLeft = 100
+WindowTop = 100
+RestoreWindowPosition = false
 IsDarkTheme = true
 ExecuteAfterSend = false
 ```
@@ -207,7 +213,13 @@ ExecuteAfterSend = false
 項目:
 
 - `ActiveLeftTabIndex`: 左ペインで最後にアクティブだったタブ位置。
+- `PaneDisplayMode`: アプリ全体のペイン表示。`TwoPane`、`LeftPane`、`RightPane` のいずれか。
 - `RightPaneSelectedTab`: 右ペインの選択タブ。`History` または `Template`。
+- `WindowWidth`: アプリケーションウィンドウの幅。
+- `WindowHeight`: アプリケーションウィンドウの高さ。
+- `WindowLeft`: アプリケーションウィンドウの左位置。`RestoreWindowPosition = true` の場合だけ復元に使います。
+- `WindowTop`: アプリケーションウィンドウの上位置。`RestoreWindowPosition = true` の場合だけ復元に使います。
+- `RestoreWindowPosition`: 起動時に `WindowLeft` / `WindowTop` を復元するか。
 - `IsDarkTheme`: テーマ状態。`true` はダーク、`false` はライト。
 - `ExecuteAfterSend`: 「送信後実行」の現在チェック状態。
 

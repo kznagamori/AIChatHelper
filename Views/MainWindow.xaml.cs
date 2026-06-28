@@ -40,6 +40,7 @@ public partial class MainWindow : Window
 	private bool _isUpdatingSelection;
 	private bool _suppressUiStateSave = true;
 	private bool _isSettingsWindowOpen;
+	private bool _restoreWindowPosition;
 
 	public object? ActiveChatCommandTarget
 	{
@@ -70,6 +71,9 @@ public partial class MainWindow : Window
 	{
 		InitializeComponent();
 		_uiStateSaveTimer.Tick += UiStateSaveTimer_Tick;
+		SizeChanged += MainWindow_SizeOrPositionChanged;
+		LocationChanged += MainWindow_LocationChanged;
+		StateChanged += MainWindow_StateChanged;
 	}
 
 	public MainWindow(Core.Factory.IWindowFactory windowFactory,
@@ -86,6 +90,8 @@ public partial class MainWindow : Window
 		_mainGrid = (Grid)Content;
 
 		var config = settingsService.Load();
+		_restoreWindowPosition = config.Config.UiState?.RestoreWindowPosition ?? false;
+		RestoreWindowPlacement(config.Config.UiState);
 
 		// 起動時のみOSのテーマを検出して、WebView2初期化前にViewModelへ反映
 		bool isDarkMode = config.Config.UiState?.IsDarkTheme ?? IsSystemInDarkMode();
@@ -131,7 +137,7 @@ public partial class MainWindow : Window
 
 	private void ToggleTabDisplayModeButton_Click(object sender, RoutedEventArgs e)
 	{
-		_isEqualContentDisplayMode = ToggleTabDisplayModeButton.IsChecked == true;
+		_isEqualContentDisplayMode = !_isEqualContentDisplayMode;
 		ApplyLeftPaneDisplayMode();
 	}
 
@@ -221,6 +227,54 @@ public partial class MainWindow : Window
 
 		var activeIndex = Math.Clamp(uiState?.ActiveLeftTabIndex ?? 0, 0, _chatTabStates.Count - 1);
 		SetActiveChatTab(_chatTabStates[activeIndex]);
+	}
+
+	private void RestoreWindowPlacement(UiStateSettings? uiState)
+	{
+		if (uiState == null)
+		{
+			return;
+		}
+
+		if (IsValidWindowDimension(uiState.WindowWidth))
+		{
+			Width = Math.Max(MinWidth, uiState.WindowWidth!.Value);
+		}
+
+		if (IsValidWindowDimension(uiState.WindowHeight))
+		{
+			Height = Math.Max(MinHeight, uiState.WindowHeight!.Value);
+		}
+
+		if (!uiState.RestoreWindowPosition ||
+			!IsFinite(uiState.WindowLeft) ||
+			!IsFinite(uiState.WindowTop))
+		{
+			return;
+		}
+
+		var left = uiState.WindowLeft!.Value;
+		var top = uiState.WindowTop!.Value;
+		if (!IsWindowPositionVisible(left, top, Width, Height))
+		{
+			return;
+		}
+
+		WindowStartupLocation = WindowStartupLocation.Manual;
+		Left = left;
+		Top = top;
+	}
+
+	private static bool IsWindowPositionVisible(double left, double top, double width, double height)
+	{
+		var screenBounds = new Rect(
+			SystemParameters.VirtualScreenLeft,
+			SystemParameters.VirtualScreenTop,
+			SystemParameters.VirtualScreenWidth,
+			SystemParameters.VirtualScreenHeight);
+		var windowBounds = new Rect(left, top, Math.Max(100, width), Math.Max(100, height));
+
+		return screenBounds.IntersectsWith(windowBounds);
 	}
 
 	private static ChatSite? FindMatchingChatSite(LeftPaneTabState savedTab, IReadOnlyList<ChatSite> chatSites)
@@ -672,12 +726,16 @@ public partial class MainWindow : Window
 			BorderThickness = new Thickness(1),
 			BorderBrush = GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray),
 			Background = Brushes.Transparent,
+			HorizontalAlignment = HorizontalAlignment.Stretch,
+			VerticalAlignment = VerticalAlignment.Stretch,
 			Tag = tabState
 		};
 		border.MouseLeftButtonDown += EqualTabColumn_MouseLeftButtonDown;
 
 		var columnGrid = new Grid
 		{
+			HorizontalAlignment = HorizontalAlignment.Stretch,
+			VerticalAlignment = VerticalAlignment.Stretch,
 			Tag = tabState
 		};
 		columnGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -731,7 +789,9 @@ public partial class MainWindow : Window
 		{
 			Content = tabState.ContentElement,
 			HorizontalContentAlignment = HorizontalAlignment.Stretch,
-			VerticalContentAlignment = VerticalAlignment.Stretch
+			VerticalContentAlignment = VerticalAlignment.Stretch,
+			HorizontalAlignment = HorizontalAlignment.Stretch,
+			VerticalAlignment = VerticalAlignment.Stretch
 		};
 		Grid.SetRow(contentHost, 1);
 
@@ -874,21 +934,27 @@ public partial class MainWindow : Window
 
 	private void UpdateTabDisplayModeButton()
 	{
-		if (ToggleTabDisplayModeButton == null || ToggleTabDisplayModeIcon == null)
+		if (ToggleTabDisplayModeButton == null || ToggleTabDisplayModeIcon == null || ToggleTabDisplayModeText == null)
 		{
 			return;
 		}
 
-		ToggleTabDisplayModeButton.IsChecked = _isEqualContentDisplayMode;
 		ToggleTabDisplayModeButton.ToolTip = _isEqualContentDisplayMode
 			? "通常のタブ表示に戻す"
 			: "すべてのタブを等分表示";
 		ToggleTabDisplayModeIcon.Kind = _isEqualContentDisplayMode
 			? PackIconKind.ViewAgendaOutline
 			: PackIconKind.ViewColumnOutline;
+		ToggleTabDisplayModeText.Text = _isEqualContentDisplayMode ? "タブ表示" : "等分表示";
 		ToggleTabDisplayModeButton.Foreground = _isEqualContentDisplayMode
-			? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
+			? GetBrushResource("MaterialDesign.Brush.Primary.Foreground", SystemColors.HighlightTextBrush)
 			: GetBrushResource("MaterialDesign.Brush.Foreground", SystemColors.ControlTextBrush);
+		ToggleTabDisplayModeButton.Background = _isEqualContentDisplayMode
+			? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
+			: Brushes.Transparent;
+		ToggleTabDisplayModeButton.BorderBrush = _isEqualContentDisplayMode
+			? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
+			: GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray);
 	}
 
 	private Brush GetBrushResource(string resourceKey, Brush fallback)
@@ -904,6 +970,21 @@ public partial class MainWindow : Window
 
 		// 一度だけ実行するためにイベントハンドラを削除
 		Loaded -= MainWindow_Loaded;
+	}
+
+	private void MainWindow_SizeOrPositionChanged(object sender, SizeChangedEventArgs e)
+	{
+		RequestDebouncedUiStateSave();
+	}
+
+	private void MainWindow_LocationChanged(object? sender, EventArgs e)
+	{
+		RequestDebouncedUiStateSave();
+	}
+
+	private void MainWindow_StateChanged(object? sender, EventArgs e)
+	{
+		RequestDebouncedUiStateSave();
 	}
 
 	private void MainViewModel_UiStateChanged(object? sender, EventArgs e)
@@ -960,13 +1041,20 @@ public partial class MainWindow : Window
 		var activeIndex = _activeChatTabState == null
 			? 0
 			: Math.Max(0, _chatTabStates.IndexOf(_activeChatTabState));
+		var windowBounds = GetRestorableWindowBounds();
 
 		return new UiStateSettings
 		{
 			ActiveLeftTabIndex = activeIndex,
+			PaneDisplayMode = viewModel?.GetPaneDisplayMode() ?? "TwoPane",
 			RightPaneSelectedTab = NormalizeRightPaneSelectedTab(viewModel?.RightPaneSelectedTab),
 			IsDarkTheme = viewModel?.IsDarkTheme,
 			ExecuteAfterSend = viewModel?.ExecuteAfterSend,
+			WindowWidth = IsValidWindowDimension(windowBounds.Width) ? windowBounds.Width : null,
+			WindowHeight = IsValidWindowDimension(windowBounds.Height) ? windowBounds.Height : null,
+			WindowLeft = IsFinite(windowBounds.Left) ? windowBounds.Left : null,
+			WindowTop = IsFinite(windowBounds.Top) ? windowBounds.Top : null,
+			RestoreWindowPosition = _restoreWindowPosition,
 			LeftPaneTabs = _chatTabStates.Select(tabState => new LeftPaneTabState
 			{
 				SiteName = tabState.Site.Name,
@@ -974,6 +1062,36 @@ public partial class MainWindow : Window
 				DisplayName = tabState.DisplayName
 			}).ToList()
 		};
+	}
+
+	private Rect GetRestorableWindowBounds()
+	{
+		if (WindowState == WindowState.Normal)
+		{
+			return new Rect(Left, Top, Width, Height);
+		}
+
+		return RestoreBounds;
+	}
+
+	private static bool IsValidWindowDimension(double? value)
+	{
+		return value.HasValue && IsValidWindowDimension(value.Value);
+	}
+
+	private static bool IsValidWindowDimension(double value)
+	{
+		return IsFinite(value) && value > 0;
+	}
+
+	private static bool IsFinite(double? value)
+	{
+		return value.HasValue && IsFinite(value.Value);
+	}
+
+	private static bool IsFinite(double value)
+	{
+		return !double.IsNaN(value) && !double.IsInfinity(value);
 	}
 
 	private static string NormalizeRightPaneSelectedTab(string? value)
@@ -1003,7 +1121,27 @@ public partial class MainWindow : Window
 		finally
 		{
 			_isSettingsWindowOpen = false;
+			ReloadUiStateOptions();
 			SaveCurrentUiStateImmediately();
+		}
+	}
+
+	private void ReloadUiStateOptions()
+	{
+		if (_settingsService == null)
+		{
+			return;
+		}
+
+		try
+		{
+			var uiState = _settingsService.Load().Config.UiState;
+			_restoreWindowPosition = uiState.RestoreWindowPosition;
+			_mainViewModel?.ApplyPaneDisplayMode(uiState.PaneDisplayMode);
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"UI状態設定の再読み込みに失敗しました: {ex.Message}");
 		}
 	}
 
@@ -1184,6 +1322,9 @@ public partial class MainWindow : Window
 		_uiStateSaveTimer.Tick -= UiStateSaveTimer_Tick;
 		ToggleTabDisplayModeButton.Click -= ToggleTabDisplayModeButton_Click;
 		TabControlMain.SelectionChanged -= TabControlMain_SelectionChanged;
+		SizeChanged -= MainWindow_SizeOrPositionChanged;
+		LocationChanged -= MainWindow_LocationChanged;
+		StateChanged -= MainWindow_StateChanged;
 		base.OnClosed(e);
 	}
 }

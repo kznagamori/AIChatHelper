@@ -14,7 +14,8 @@
         TextElement.Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
         Background="{DynamicResource MaterialDesign.Brush.Background}"
         mc:Ignorable="d"
-        Title="AIChatHelper" Height="800" Width="1400"
+        Title="AIChatHelper" Height="800" Width="1600" MinWidth="1440" MinHeight="720"
+        WindowStartupLocation="CenterScreen"
         Icon="pack://siteoforigin:,,,/Assets/app.ico">
     <Window.Resources>
         <conv:HistoryItemDisplayConverter x:Key="HistoryItemDisplayConverter" />
@@ -143,22 +144,29 @@
                         <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
                     </Button>
 
-                    <ToggleButton x:Name="ToggleTabDisplayModeButton"
-                                  Grid.Column="2"
-                                  Width="40"
-                                  Height="40"
-                                  Padding="0"
-                                  BorderThickness="0"
-                                  Background="Transparent"
-                                  Focusable="False"
-                                  Cursor="Hand"
-                                  ToolTip="すべてのタブを等分表示"
-                                  Click="ToggleTabDisplayModeButton_Click">
-                        <materialDesign:PackIcon x:Name="ToggleTabDisplayModeIcon"
-                                                 Kind="ViewColumnOutline"
-                                                 Width="20"
-                                                 Height="20" />
-                    </ToggleButton>
+                    <Button x:Name="ToggleTabDisplayModeButton"
+                            Grid.Column="2"
+                            Width="116"
+                            Height="40"
+                            Padding="10,0"
+                            BorderThickness="1"
+                            Focusable="False"
+                            Cursor="Hand"
+                            ToolTip="すべてのタブを等分表示"
+                            Click="ToggleTabDisplayModeButton_Click">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <materialDesign:PackIcon x:Name="ToggleTabDisplayModeIcon"
+                                                     Kind="ViewColumnOutline"
+                                                     Width="20"
+                                                     Height="20"
+                                                     Margin="0,0,4,0" />
+                            <TextBlock x:Name="ToggleTabDisplayModeText"
+                                       Text="等分表示"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </Border>
 
@@ -195,6 +203,9 @@
                 </TabControl>
 
                 <Grid x:Name="EqualTabContentHost"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      ClipToBounds="True"
                       Visibility="Collapsed" />
             </Grid>
         </Grid>

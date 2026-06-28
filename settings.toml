@@ -80,3 +80,24 @@ SubmitButtonSelectors = [
 	'button[data-testid*="send"]',
 ]
 KeyboardFallback = "None"
+
+[Config.UiState]
+# アプリが最後に保存した左ペインのアクティブタブ位置。範囲外の場合は 0 に丸める。
+ActiveLeftTabIndex = 0
+
+# アプリ全体のペイン表示。TwoPane, LeftPane, RightPane のいずれか。
+PaneDisplayMode = "TwoPane"
+
+# 右ペインの選択タブ。History または Template。
+RightPaneSelectedTab = "History"
+
+# アプリケーションウィンドウの幅と高さ
+WindowWidth = 1600
+WindowHeight = 800
+
+# アプリケーションウィンドウの左位置と上位置。RestoreWindowPosition が true の場合だけ復元に使う。
+WindowLeft = 100
+WindowTop = 100
+
+# true: 保存した WindowLeft / WindowTop を起動時に復元する
+RestoreWindowPosition = false

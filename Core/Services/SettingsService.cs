@@ -22,6 +22,13 @@ public class SettingsService : ISettingsService
 		"CtrlEnter"
 	};
 
+	private static readonly HashSet<string> PaneDisplayModeValues = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"TwoPane",
+		"LeftPane",
+		"RightPane"
+	};
+
 	private readonly string _filePath;
 	public string SettingsFilePath => _filePath;
 
@@ -121,7 +128,12 @@ public class SettingsService : ISettingsService
 
 		var uiState = config.Config.UiState;
 		uiState.ActiveLeftTabIndex = Math.Max(0, uiState.ActiveLeftTabIndex);
+		uiState.PaneDisplayMode = NormalizePaneDisplayMode(uiState.PaneDisplayMode);
 		uiState.RightPaneSelectedTab = NormalizeRightPaneSelectedTab(uiState.RightPaneSelectedTab);
+		uiState.WindowWidth = NormalizePositiveDouble(uiState.WindowWidth);
+		uiState.WindowHeight = NormalizePositiveDouble(uiState.WindowHeight);
+		uiState.WindowLeft = NormalizeFiniteDouble(uiState.WindowLeft);
+		uiState.WindowTop = NormalizeFiniteDouble(uiState.WindowTop);
 		uiState.LeftPaneTabs = uiState.LeftPaneTabs
 			.Where(tab => tab != null)
 			.Select(tab => new LeftPaneTabState
@@ -235,6 +247,26 @@ public class SettingsService : ISettingsService
 		return candidates.Contains(candidate)
 			? candidates.First(item => item.Equals(candidate, StringComparison.OrdinalIgnoreCase))
 			: fallback;
+	}
+
+	private static double? NormalizePositiveDouble(double? value)
+	{
+		if (!value.HasValue || !IsFinite(value.Value) || value.Value <= 0)
+		{
+			return null;
+		}
+
+		return value.Value;
+	}
+
+	private static double? NormalizeFiniteDouble(double? value)
+	{
+		if (!value.HasValue || !IsFinite(value.Value))
+		{
+			return null;
+		}
+
+		return value.Value;
 	}
 
 	private static string BuildAppConfigToml(AppConfig config)
@@ -371,8 +403,43 @@ public class SettingsService : ISettingsService
 		builder.AppendLine("# アプリが最後に保存した左ペインのアクティブタブ位置。範囲外の場合は 0 に丸める。");
 		builder.AppendLine($"ActiveLeftTabIndex = {Math.Max(0, uiState.ActiveLeftTabIndex)}");
 		builder.AppendLine();
+		builder.AppendLine("# アプリ全体のペイン表示。TwoPane, LeftPane, RightPane のいずれか。");
+		builder.AppendLine($"PaneDisplayMode = \"{EscapeTomlString(NormalizePaneDisplayMode(uiState.PaneDisplayMode))}\"");
+		builder.AppendLine();
 		builder.AppendLine("# 右ペインの選択タブ。History または Template。");
 		builder.AppendLine($"RightPaneSelectedTab = \"{EscapeTomlString(NormalizeRightPaneSelectedTab(uiState.RightPaneSelectedTab))}\"");
+
+		if (uiState.WindowWidth.HasValue)
+		{
+			builder.AppendLine();
+			builder.AppendLine("# アプリケーションウィンドウの幅");
+			builder.AppendLine($"WindowWidth = {FormatTomlDouble(uiState.WindowWidth.Value)}");
+		}
+
+		if (uiState.WindowHeight.HasValue)
+		{
+			builder.AppendLine();
+			builder.AppendLine("# アプリケーションウィンドウの高さ");
+			builder.AppendLine($"WindowHeight = {FormatTomlDouble(uiState.WindowHeight.Value)}");
+		}
+
+		if (uiState.WindowLeft.HasValue)
+		{
+			builder.AppendLine();
+			builder.AppendLine("# アプリケーションウィンドウの左位置。RestoreWindowPosition が true の場合だけ復元に使う。");
+			builder.AppendLine($"WindowLeft = {FormatTomlDouble(uiState.WindowLeft.Value)}");
+		}
+
+		if (uiState.WindowTop.HasValue)
+		{
+			builder.AppendLine();
+			builder.AppendLine("# アプリケーションウィンドウの上位置。RestoreWindowPosition が true の場合だけ復元に使う。");
+			builder.AppendLine($"WindowTop = {FormatTomlDouble(uiState.WindowTop.Value)}");
+		}
+
+		builder.AppendLine();
+		builder.AppendLine("# true: 保存した WindowLeft / WindowTop を起動時に復元する");
+		builder.AppendLine($"RestoreWindowPosition = {ToTomlBoolean(uiState.RestoreWindowPosition)}");
 
 		if (uiState.IsDarkTheme.HasValue)
 		{
@@ -412,9 +479,24 @@ public class SettingsService : ISettingsService
 			: "History";
 	}
 
+	private static string NormalizePaneDisplayMode(string? value)
+	{
+		return NormalizeChoice(value, PaneDisplayModeValues, "TwoPane");
+	}
+
 	private static string ToTomlBoolean(bool value)
 	{
 		return value.ToString().ToLowerInvariant();
+	}
+
+	private static string FormatTomlDouble(double value)
+	{
+		return value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+	}
+
+	private static bool IsFinite(double value)
+	{
+		return !double.IsNaN(value) && !double.IsInfinity(value);
 	}
 
 	private static string EscapeTomlString(string? value)

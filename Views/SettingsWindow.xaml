@@ -575,6 +575,10 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
@@ -601,15 +605,31 @@
 
                     <TextBlock Grid.Row="1"
                                Grid.Column="0"
-                               Text="RightPaneSelectedTab"
+                               Text="PaneDisplayMode"
                                VerticalAlignment="Center"
                                Margin="0,0,8,8" />
                     <ComboBox Grid.Row="1"
                               Grid.Column="1"
+                              ItemsSource="{Binding PaneDisplayModeOptions}"
+                              SelectedItem="{Binding PaneDisplayMode, Mode=TwoWay}"
+                              Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="2"
+                               Text="アプリ全体のペイン表示"
+                               VerticalAlignment="Center"
+                               Margin="16,0,0,8" />
+
+                    <TextBlock Grid.Row="2"
+                               Grid.Column="0"
+                               Text="RightPaneSelectedTab"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,8" />
+                    <ComboBox Grid.Row="2"
+                              Grid.Column="1"
                               ItemsSource="{Binding RightPaneSelectedTabOptions}"
                               SelectedItem="{Binding RightPaneSelectedTab, Mode=TwoWay}"
                               Margin="0,0,0,8" />
-                    <StackPanel Grid.Row="1"
+                    <StackPanel Grid.Row="2"
                                 Grid.Column="2"
                                 Orientation="Horizontal"
                                 Margin="16,0,0,8">
@@ -622,7 +642,60 @@
                                   IsChecked="{Binding UiStateExecuteAfterSend, Mode=TwoWay}" />
                     </StackPanel>
 
-                    <DataGrid Grid.Row="2"
+                    <TextBlock Grid.Row="3"
+                               Grid.Column="0"
+                               Text="WindowSize"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,8" />
+                    <StackPanel Grid.Row="3"
+                                Grid.Column="1"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal"
+                                Margin="0,0,0,8">
+                        <TextBox Width="120"
+                                 Text="{Binding UiStateWindowWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0" />
+                        <TextBlock Text="x"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <TextBox Width="120"
+                                 Text="{Binding UiStateWindowHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,16,0" />
+                        <TextBlock Text="幅 / 高さ"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="4"
+                               Grid.Column="0"
+                               Text="WindowPosition"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,8" />
+                    <StackPanel Grid.Row="4"
+                                Grid.Column="1"
+                                Grid.ColumnSpan="2"
+                                Orientation="Horizontal"
+                                Margin="0,0,0,8">
+                        <TextBox Width="120"
+                                 Text="{Binding UiStateWindowLeft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0" />
+                        <TextBlock Text=","
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <TextBox Width="120"
+                                 Text="{Binding UiStateWindowTop, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,16,0" />
+                        <TextBlock Text="左 / 上"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <CheckBox Grid.Row="5"
+                              Grid.Column="1"
+                              Grid.ColumnSpan="2"
+                              Content="起動時に WindowPosition を復元する"
+                              IsChecked="{Binding UiStateRestoreWindowPosition, Mode=TwoWay}"
+                              Margin="0,0,0,8" />
+
+                    <DataGrid Grid.Row="6"
                               Grid.Column="0"
                               Grid.ColumnSpan="3"
                               ItemsSource="{Binding LeftPaneTabs}"

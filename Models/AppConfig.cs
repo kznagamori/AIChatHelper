@@ -54,9 +54,15 @@ public class ServiceExecutorSettings
 public class UiStateSettings
 {
 	public int ActiveLeftTabIndex { get; set; } = 0;
+	public string PaneDisplayMode { get; set; } = "TwoPane";
 	public string RightPaneSelectedTab { get; set; } = "History";
 	public bool? IsDarkTheme { get; set; }
 	public bool? ExecuteAfterSend { get; set; }
+	public double? WindowWidth { get; set; }
+	public double? WindowHeight { get; set; }
+	public double? WindowLeft { get; set; }
+	public double? WindowTop { get; set; }
+	public bool RestoreWindowPosition { get; set; } = false;
 	public List<LeftPaneTabState> LeftPaneTabs { get; set; } = new List<LeftPaneTabState>();
 }
 

@@ -1,109 +1,200 @@
 # AIChatHelper
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/kznagamori/AIChatHelper?label=release)](https://github.com/kznagamori/AIChatHelper/releases)![Platform](https://img.shields.io/badge/platform-Windows-0078D4)
+![UI](https://img.shields.io/badge/UI-WPF-5C2D91)![Language](https://img.shields.io/badge/language-C%23-239120)![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 ## 概要
 
-AIChatHelperは、複数のAIチャットサービス（ChatGPT、Claude、Gemini、Phindなど）を一つのアプリケーションから簡単に利用できるWPFデスクトップアプリケーションです。AIチャットサービスへのプロンプト管理、テンプレートの保存・使用、履歴の記録といった機能を提供し、AIチャットサービスの利用効率を高めます。
+AIChatHelper は、ChatGPT、Gemini、Claude などの AI チャットサービスを 1 つの WPF デスクトップアプリケーションから扱うためのヘルパーアプリです。
 
-### 主な機能
+右ペインのエディタでプロンプトを作成し、左ペインの WebView2 タブに表示したチャットサービスへ入力できます。履歴、テンプレート、送信後実行、状態保存、設定ウィンドウを備え、日常的に同じプロンプト作業を繰り返す用途に向いています。
 
-- 複数のAIチャットサービスをタブで切り替え可能
-- プロンプトの保存と再利用
-- テンプレート機能によるプリセットプロンプトの管理
-- チャット履歴の保存と管理
-- 履歴検索機能
-- ダークモード/ライトモード対応
-- 左右パネルのサイズ調整と表示切替
-- 設定ファイルによるカスタマイズ
+## 主な機能
+
+- `settings.toml` の `[[ChatSites]]` に定義したチャットサービスを左ペインへタブ追加
+- 左ペインのチャットタブを閉じる、通常タブ表示と等分表示を切り替える
+- 右ペインで履歴タブとテンプレートタブを切り替え
+- テンプレートをフォルダー階層付きツリービューで表示
+- チャット入力後に、必要に応じてサービス側の実行ボタンも押す「送信後実行」
+- ChatGPT、Gemini、Claude 向けの送信後実行設定
+- プロンプト履歴の保存、検索、管理
+- ダークモード/ライトモード切り替え
+- 左右ペインの表示切り替えとサイズ調整
+- UI 状態を `settings.toml` に保存して次回起動時に復元
+- `settings.toml` を項目別コントロールで編集できる設定ウィンドウ
 
 ## インストール方法
 
 ### 通常インストール
 
-1. [GitHub Releases](https://github.com/kznagamori/AIChatHelper/releases) から最新のリリースをダウンロードします
-2. ダウンロードしたZIPファイルを任意のフォルダーに展開します
-3. `AIChatHelper.exe` を実行してアプリケーションを起動します
+1. [GitHub Releases](https://github.com/kznagamori/AIChatHelper/releases) から最新のリリースをダウンロードします。
+2. ダウンロードした ZIP ファイルを任意のフォルダーに展開します。
+3. `AIChatHelper.exe` を実行します。
 
 ### ポータブル使用
 
-- 展開したフォルダーは、USBメモリなどに入れて持ち運ぶことも可能です
-- アプリケーションはインストールせず、実行ファイルから直接起動できます
+展開したフォルダーを USB メモリなどに入れて持ち運ぶこともできます。インストーラーは不要で、実行ファイルから直接起動できます。
 
 ## 使い方
 
-### 基本的な使い方
+### 基本操作
 
-1. アプリケーションを起動すると、左側にAIチャットサービスのタブ、右側にエディター領域が表示されます
-2. 利用したいAIチャットサービスのタブを選択します
-3. エディター領域にプロンプトを入力します
-4. 「チャットへ」ボタンをクリックするか、Ctrl+Enterキーを押すとプロンプトがAIチャットサービスに送信されます
+1. アプリケーションを起動すると、左ペインにチャットサービス、右ペインに履歴・テンプレート・エディタが表示されます。
+2. 左ペイン上部のコンボボックスでチャットサービスを選び、`+` ボタンでタブを追加します。
+3. 右ペイン下部のエディタにプロンプトを入力します。
+4. 「チャットへ」をクリックするか `Ctrl+Enter` を押すと、選択中のチャットタブの入力欄へプロンプトを反映します。
+5. 「送信後実行」をチェックしている場合は、入力後にサービス側の実行ボタンも押します。
 
-![メイン画面](./Assets/image-20250518204508865.png)
+![image-20260629021735666](./assets/image-20260629021735666.png)
 
-### テンプレート機能
+### 左ペインのチャットタブ
 
-1. 上部のテンプレート選択ドロップダウンからテンプレートを選択できます
-    ![テンプレート選択ドロップ](./Assets/image-20250518204612071.png)
-2. テンプレートフォルダーボタン（虫眼鏡アイコン）をクリックすると、テンプレートフォルダーが開きます
-    ![テンプレートフォルダーボタン](./Assets/image-20250518204658646.png)
-3. テンプレートフォルダーにテキストファイルを追加すると、新しいテンプレートとして利用できます
+左ペイン上部には、チャットタブを追加するためのコントロールがあります。
 
-### 履歴管理
+- コンボボックス: `settings.toml` の `[[ChatSites]]` から追加するサービスを選択
+- `+` ボタン: 選択したサービスの WebView2 タブを追加
+- 表示切替ボタン: 通常タブ表示と、すべてのタブ内容を等幅で並べる等分表示を切り替え
+- タブの `×` ボタン: 対象タブを閉じる
 
-1. エディター上部の履歴表示エリアには、以前使用したプロンプトが日付別に表示されます
-    ![例歴表示](./Assets/image-20250518204905381.png)
-2. 履歴アイテムをダブルクリックすると、そのプロンプトがエディターに読み込まれます
-3. 履歴カードの右上にある展開ボタン（下向き矢印アイコン）をクリックすると、履歴の全文が表示されます
-   - 展開状態では上向き矢印アイコンに変わり、再度クリックすると折りたたまれます
-   - 通常状態では履歴は省略表示されますが、展開するとスクロール可能な全文表示になります
-    ![展開ボタン](./Assets/image-20250518204958918.png)
-4. 履歴管理ボタン（時計アイコン）をクリックすると、履歴管理ウィンドウが開きます
-    ![履歴管理ボタン](./Assets/image-20250518205049068.png)
-5. 履歴管理ウィンドウでは、過去のプロンプトの削除や一括削除ができます
-    ![履歴ウィンドウ](./Assets/image-20250518205141266.png)
+![image-20260629021836498](./assets/image-20260629021836498.png)
 
-### 履歴検索機能
+等分表示では、表示中のすべてのチャットタブ内容を 1 画面内に等幅で並べます。複数サービスの画面を同時に比較したい場合に使います。
 
-1. エディター上部の検索ボックスに検索したいキーワードを入力します
-2. Enterキーを押すか、検索ボタンをクリックすると、入力したキーワードを含む履歴が表示されます
-3. 検索履歴はドロップダウンで表示され、過去の検索キーワードを再利用できます
-4. 検索をクリアするには、検索ボックス右側のクリアボタン（×マーク）をクリックします
+![image-20260629021928720](./assets/image-20260629021928720.png)
 
-![履歴検索](./Assets/image-20250518205421414.png)
+### 履歴
 
-### 表示モード切替
+右ペイン上部の `履歴` タブでは、過去に送信したプロンプトを検索・再利用できます。
 
-1. 右上や左上の黄色い三角形をクリックすると、表示モードを切り替えられます
-2. 左ペインのみ表示、右ペインのみ表示、両方表示の3つのモードがあります
+1. 検索ボックスにキーワードを入力します。
+2. `Enter` または検索操作で履歴を絞り込みます。
+3. 履歴アイテムを選択すると、内容をエディタへ反映できます。
+4. 履歴管理ボタンから、履歴管理ウィンドウを開いて削除や一括削除ができます。
 
-![表示モード切替](./Assets/image-20250518205529172.png)
+![image-20260629022029060](./assets/image-20260629022029060.png)
 
-### テーマ切替
+![image-20260629022117041](./assets/image-20260629022117041.png)
 
-- 左下のトグルボタンをクリックすると、ダークモードとライトモードを切り替えられます
+### テンプレート
 
-![テーマ切替](./Assets/image-20250518205604812.png)
+右ペイン上部の `テンプレート` タブでは、テンプレートファイルをツリービューで表示します。
 
-##### Lightモード
-![Lightモード](./Assets/image-20250518205635155.png)
+- フォルダーは `+` / `-` の古いエクスプローラー風表示で展開・折りたたみできます。
+- テンプレートファイルを選択またはダブルクリックすると、内容をエディタに反映できます。
+- テンプレートの参照先ディレクトリは `settings.toml` の `[Config.TemplateSettings].TemplateDirectory` で指定できます。
+- 相対パス、絶対パス、ドライブパス、UNC パスを指定できます。
+- ネットワークドライブや UNC パスで認証が必要な場合は、Windows 側の認証ダイアログが表示されることがあります。
 
-##### Darkモード
-![Darkモード](./Assets/image-20250518205705876.png)
+![image-20260629022214257](./assets/image-20260629022214257.png)
+
+標準テンプレートは `template` フォルダーに配置されています。現在は用途別に次のようなフォルダー構成になっています。
+
+```text
+template/
+  ビジネス文章/
+  プログラミング/
+  メール/
+```
+
+### 送信後実行
+
+通常の「チャットへ」は、エディタ内容をチャットサービスの入力欄へ反映します。右ペイン下部の「送信後実行」をオンにすると、入力反映後にサービス側の送信・実行ボタンも押します。
+
+対応対象:
+
+- ChatGPT
+- Gemini
+- Claude
+
+実行ボタンの判定は `settings.toml` の `[Config.ExecuteAfterSendSettings]` と `[[Config.ExecuteAfterSendSettings.ServiceExecutors]]` で調整できます。サービス側 UI が変わった場合は、`SubmitButtonSelectors` を更新してください。
+
+![image-20260629022247082](./assets/image-20260629022247082.png)
+
+### テーマ切り替え
+
+右ペイン下部のテーマ切替ボタンで、ダークモードとライトモードを切り替えられます。テーマ状態は `settings.toml` の `[Config.UiState]` に保存され、次回起動時に復元されます。
+
+*ダークモード**
+
+![image-20260629022517100](./assets/image-20260629022517100.png)
+
+**ライトモード**
+
+![image-20260629022555829](./assets/image-20260629022555829.png)
+
+
+
+### 表示モード切り替え
+
+左右ペイン上部の黄色い三角形をクリックすると、表示モードを切り替えられます。
+
+- 両方表示
+- 左ペインのみ表示
+- 右ペインのみ表示
+
+左右ペインの幅は中央のスプリッターで調整できます。
+
+**両方表示**
+
+
+
 
 
 ### アプリケーション情報
 
-- 右上の情報アイコンをクリックすると、アプリケーション情報ウィンドウが開きます
-- バージョン情報、著作権情報、ライセンス情報などが表示されます
+右ペイン上部の情報アイコンをクリックすると、アプリケーション情報ウィンドウが開きます。バージョン情報、著作権情報、ライセンス情報などを確認できます。
 
-![アプリケーション情報](./Assets/image-20250518205727015.png)
+**ここに、アプリケーション情報ウィンドウのキャプチャ画像を貼ってください。**
 
-## カスタマイズ
+## 設定
 
-### 設定ファイル（settings.toml）
+### 設定ウィンドウ
 
-アプリケーションの動作は `settings.toml` ファイルで設定できます。このファイルはアプリケーションと同じフォルダにあります。設定ファイルを編集することで、さまざまな機能をカスタマイズできます。
+右ペイン上部の歯車アイコンから設定ウィンドウを開けます。設定ウィンドウを開く直前に、現在の UI 状態が `settings.toml` に保存されます。
+
+設定ウィンドウでは、raw TOML を直接編集するのではなく、各項目に適したコントロールで設定を変更します。
+
+- チャットサイト: `[[ChatSites]]` の追加、削除、並び替え
+- 入力欄: `InputSelectors` の追加、削除、並び替え
+- エディタ: 上書き確認、クリア時テンプレート挿入、挿入テキスト
+- テンプレート: テンプレートディレクトリ
+- 送信後実行: タイムアウト、サービス別 URL パターン、実行ボタンセレクター、キーボード代替
+- 表示状態: ペイン表示モード、右ペイン選択タブ、テーマ、送信後実行チェック状態、左ペインタブ状態
+
+設定ウィンドウには、このリポジトリと `settings.toml` 設定ガイドへのリンクも表示されます。
+
+**ここに、設定ウィンドウ全体のキャプチャ画像を貼ってください。**
+
+### 状態保存
+
+次の状態は `settings.toml` の `[Config.UiState]` に保存され、次回起動時に復元されます。
+
+- 左ペインで表示しているチャットタブ
+- 左ペインのアクティブタブ位置
+- アプリ全体のペイン表示モード、`TwoPane` / `LeftPane` / `RightPane`
+- 右ペインの選択タブ、`History` または `Template`
+- テーマ状態
+- 「送信後実行」のチェック状態
+- アプリケーションウィンドウの表示サイズ
+- アプリケーションウィンドウの表示位置。位置を起動時に復元するかどうかは `RestoreWindowPosition` で制御します。
+
+WebView2 内のページ遷移後 URL、スクロール位置、ログイン状態は保存しません。
+
+### settings.toml
+
+アプリケーションの動作は、実行フォルダーの `settings.toml` で設定できます。主要なセクションは次のとおりです。
+
+- `[[ChatSites]]`: 左ペインに追加できるチャットサービス
+- `[Config].InputSelectors`: チャット入力欄を探す CSS セレクター
+- `[Config.EditorSettings]`: エディタの確認ダイアログやクリア時テンプレート
+- `[Config.TemplateSettings]`: テンプレートディレクトリ
+- `[Config.ExecuteAfterSendSettings]`: 送信後実行の基本設定
+- `[[Config.ExecuteAfterSendSettings.ServiceExecutors]]`: サービス別の実行設定
+- `[Config.UiState]`: アプリが自動保存する表示状態
+
+詳細は [docs/settings-toml.md](docs/settings-toml.md) を参照してください。
+
+設定例:
 
 ```toml
 [[ChatSites]]
@@ -111,13 +202,14 @@ Name = "ChatGPT"
 Url = "https://chat.openai.com/"
 
 [[ChatSites]]
+Name = "Gemini"
+Url = "https://gemini.google.com/app?hl=ja"
+
+[[ChatSites]]
 Name = "Claude"
 Url = "https://claude.ai/new"
 
-# 他のAIチャットサービスも同様に設定可能
-
 [Config]
-# テキスト入力欄の検索条件（優先度が上の順に並べる）
 InputSelectors = [
     '[contenteditable="true"][role="textbox"]',
     '[contenteditable="true"]',
@@ -129,185 +221,68 @@ InputSelectors = [
 [Config.EditorSettings]
 ConfirmTemplateOverwrite = false
 ConfirmHistoryOverwrite = false
-# TextEditor がクリア状態になった時にテンプレートテキストを挿入するかどうか
 InsertTemplateTextOnClear = false
-# 挿入するテンプレートテキスト
 TemplateTextForEditor = """
 
 """
-```
 
-#### 設定項目の詳細
+[Config.TemplateSettings]
+TemplateDirectory = "template"
 
-##### ChatSites セクション
+[Config.ExecuteAfterSendSettings]
+DefaultEnabled = false
+ExecutionTimeoutMs = 3000
+PostInputDelayMs = 100
+RetryIntervalMs = 100
+EnableDomAnalysisLog = true
+UnsupportedServiceBehavior = "InputOnly"
 
-ChatSitesセクションでは、アプリケーションで使用するAIチャットサービスを設定できます。各チャットサービスについて以下の項目を設定します：
-
-```toml
-[[ChatSites]]
-Name = "サービス名"    # タブに表示される名前
-Url = "サービスのURL"  # チャットサービスのURL
-```
-
-標準では以下のサービスが設定されています：
-- ChatGPT (OpenAI)
-- Gemini (Google)
-- Claude (Anthropic)
-- Microsoft Copilot
-
-これらの設定を変更したり、新しいチャットサービスを追加したりすることができます。例えば、自社のAIチャットボットを追加する場合は以下のように追加します：
-
-```toml
-[[ChatSites]]
-Name = "社内ボット"
-Url = "https://internal-chatbot.company.com/"
-```
-
-##### Config セクション
-
-Configセクションでは、アプリケーションの一般的な設定を行います：
-
-```toml
-[Config]
-# テキスト入力欄の検索条件（優先度が上の順に並べる）
-InputSelectors = [
-    '[contenteditable="true"][role="textbox"]',
-    '[contenteditable="true"]',
-    'textarea.w-full.resize-none',
-    '#copilot-chat-textarea',
-    'textarea',
+[[Config.ExecuteAfterSendSettings.ServiceExecutors]]
+ServiceName = "ChatGPT"
+UrlPatterns = ["chat.openai.com", "chatgpt.com"]
+SubmitButtonSelectors = [
+    'button[data-testid="send-button"]',
+    'button[data-testid="composer-submit-button"]',
+    'button[aria-label*="Send"]',
+    'button[aria-label*="送信"]',
 ]
+KeyboardFallback = "None"
 ```
-
-`InputSelectors` は、各チャットサービスの入力欄を特定するためのCSSセレクターのリストです。リストの順番が優先順位となり、最初に一致する要素が入力欄として使用されます。
-
-多くのチャットサービスでは標準の設定で動作しますが、サービスの仕様変更や特殊なUIを持つサービスを使用する場合は、適切なCSSセレクターを追加する必要があるかもしれません。
-
-##### EditorSettings セクション
-
-エディターの動作に関する詳細な設定を行います：
-
-```toml
-[Config.EditorSettings]
-# テンプレート選択時に確認ダイアログを表示するか
-ConfirmTemplateOverwrite = true
-
-# 履歴選択時に確認ダイアログを表示するか
-ConfirmHistoryOverwrite = true
-
-# テキストエディターがクリア状態になった時にテンプレートテキストを挿入するか
-InsertTemplateTextOnClear = true
-
-# 挿入するテンプレートテキスト
-TemplateTextForEditor = """
-回答は、日本語で出力してください。
-
-"""
-```
-
-- `ConfirmTemplateOverwrite`: テンプレートを選択した際に、現在のエディターの内容を上書きする前に確認ダイアログを表示するかどうかを設定します。`true`の場合は確認ダイアログが表示され、`false`の場合は確認なしで上書きされます。
-
-- `ConfirmHistoryOverwrite`: 履歴アイテムをダブルクリックした際に、現在のエディターの内容を上書きする前に確認ダイアログを表示するかどうかを設定します。`true`の場合は確認ダイアログが表示され、`false`の場合は確認なしで上書きされます。
-
-- `InsertTemplateTextOnClear`: 「クリア」ボタンを押した際や、チャットへの送信後にエディターをクリアする際に、デフォルトのテンプレートテキストを挿入するかどうかを設定します。`true`の場合はテンプレートテキストが挿入され、`false`の場合は空になります。
-
-- `TemplateTextForEditor`: `InsertTemplateTextOnClear`が`true`の場合に挿入されるテンプレートテキストを設定します。よく使うプロンプトの接頭辞や指示文をここに設定しておくと便利です。複数行のテキストを設定する場合は、三重引用符（`"""～"""）で囲みます。
-
-##### 設定ファイルの適用タイミング
-
-設定ファイルの変更はアプリケーションの再起動後に適用されます。設定ファイルを編集した後は、アプリケーションを一度終了し、再度起動してください。
-
-##### 設定ファイルの例
-```
-[[ChatSites]]
-Name = "ChatGPT"
-Url = "https://chat.openai.com/"
-[[ChatSites]]
-Name = "Gemini"
-Url = "https://gemini.google.com/app?hl=ja"
-
-[[ChatSites]]
-Name = "Claude"
-Url = "https://claude.ai/new"
-
-[[ChatSites]]
-Name = "Phind"
-Url = "https://www.phind.com/"
-
-[[ChatSites]]
-Name = "Perplexity"
-Url = "https://www.perplexity.ai/"
-
-[[ChatSites]]
-Name = "GitHub Copilot"
-Url = "https://github.com/copilot"
-
-[[ChatSites]]
-Name = "Copilot"
-Url = "https://copilot.microsoft.com/"
-
-[Config]
-# テキスト入力欄の検索条件（優先度が上の順に並べる）
-InputSelectors = [
-	'[contenteditable="true"][role="textbox"]',
-	'[contenteditable="true"]',
-	'textarea.w-full.resize-none',
-	'#copilot-chat-textarea',
-	'textarea',
-]
-
-
-[Config.EditorSettings]
-ConfirmTemplateOverwrite = true
-ConfirmHistoryOverwrite = true
-# TextEditor がクリア状態になった時にテンプレートテキストを挿入するかどうか
-InsertTemplateTextOnClear = true
-# 挿入するテンプレートテキスト
-TemplateTextForEditor = """
-回答は、日本語で出力してください。
-
-"""
-```
-
-
 
 ## ビルド方法
 
 ### 必要条件
 
-- [.NET SDK 9.0](https://dotnet.microsoft.com/download/dotnet/9.0) 以上
+- [.NET SDK 10.0](https://dotnet.microsoft.com/download/dotnet/10.0) 以上
 - Visual Studio 2022 または Visual Studio Code
+- WebView2 Runtime
 
 ### ビルド手順
 
-1. リポジトリをクローンします：
+リポジトリをクローンします。
 
 ```bash
 git clone https://github.com/kznagamori/AIChatHelper.git
 cd AIChatHelper
 ```
 
-2. プロジェクトをビルドします：
+開発ビルド:
 
 ```bash
-# 開発ビルド
 dotnet build
+```
 
-# リリースビルド
+リリースビルド:
+
+```bash
 dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true -p:PublishTrimmed=false -p:DebugType=None
 ```
 
-または、Visual Studio Code内でタスク「publish-release」を実行します：
-
-```
-Tasks > Run Task > publish-release
-```
-
-ビルドされた実行ファイルは `bin/Release/net9.0-windows/win-x64/publish` フォルダに生成されます。
+ビルドされた実行ファイルは `bin/Release/net10.0-windows/win-x64/publish` フォルダーに生成されます。
 
 ## ライセンス
 
-MIT License - 詳細は[LICENSE](LICENSE)ファイルを参照してください。
+MIT License - 詳細は [LICENSE](LICENSE) を参照してください。
 
 ## 開発者
 

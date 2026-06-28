@@ -113,6 +113,7 @@ public partial class MainWindowViewModel : ObservableObject
 			?? _config.Config.ExecuteAfterSendSettings?.DefaultEnabled
 			?? false;
 		RightPaneSelectedTab = NormalizeRightPaneSelectedTab(_config.Config.UiState?.RightPaneSelectedTab);
+		ApplyPaneDisplayMode(_config.Config.UiState?.PaneDisplayMode);
 
 		// アプリ起動時に履歴を読み込む
 		LoadHistories();
@@ -152,6 +153,32 @@ public partial class MainWindowViewModel : ObservableObject
 		return string.Equals(value, "Template", StringComparison.OrdinalIgnoreCase)
 			? "Template"
 			: "History";
+	}
+
+	public string GetPaneDisplayMode()
+	{
+		return DisplayMode switch
+		{
+			1 => "LeftPane",
+			2 => "RightPane",
+			_ => "TwoPane"
+		};
+	}
+
+	public void ApplyPaneDisplayMode(string? value)
+	{
+		DisplayMode = PaneDisplayModeToInt(value);
+		UpdateLayout();
+	}
+
+	private static int PaneDisplayModeToInt(string? value)
+	{
+		return value?.Trim().ToUpperInvariant() switch
+		{
+			"LEFTPANE" => 1,
+			"RIGHTPANE" => 2,
+			_ => 0
+		};
 	}
 
 	// 履歴データを読み込む
@@ -1342,6 +1369,7 @@ public partial class MainWindowViewModel : ObservableObject
 		}
 
 		UpdateLayout();
+		UiStateChanged?.Invoke(this, EventArgs.Empty);
 	}
 
 	// 右ペインのみ表示コマンド
@@ -1359,6 +1387,7 @@ public partial class MainWindowViewModel : ObservableObject
 		}
 
 		UpdateLayout();
+		UiStateChanged?.Invoke(this, EventArgs.Empty);
 	}
 	// 保存された列幅（分割バーを移動した後の状態を保持）
 	private GridLength _savedLeftColumnWidth = new GridLength(1, GridUnitType.Star);

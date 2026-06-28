@@ -78,6 +78,9 @@ public partial class SettingsWindowViewModel : ObservableObject
 	private int _activeLeftTabIndex;
 
 	[ObservableProperty]
+	private string _paneDisplayMode = "TwoPane";
+
+	[ObservableProperty]
 	private string _rightPaneSelectedTab = "History";
 
 	[ObservableProperty]
@@ -86,6 +89,21 @@ public partial class SettingsWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private bool? _uiStateExecuteAfterSend;
 
+	[ObservableProperty]
+	private double? _uiStateWindowWidth;
+
+	[ObservableProperty]
+	private double? _uiStateWindowHeight;
+
+	[ObservableProperty]
+	private double? _uiStateWindowLeft;
+
+	[ObservableProperty]
+	private double? _uiStateWindowTop;
+
+	[ObservableProperty]
+	private bool _uiStateRestoreWindowPosition;
+
 	public ObservableCollection<ChatSiteSettingsItem> ChatSites { get; } = new();
 	public ObservableCollection<EditableStringItem> InputSelectors { get; } = new();
 	public ObservableCollection<ServiceExecutorSettingsItem> ServiceExecutors { get; } = new();
@@ -93,6 +111,7 @@ public partial class SettingsWindowViewModel : ObservableObject
 
 	public IReadOnlyList<string> UnsupportedServiceBehaviorOptions { get; } = new[] { "InputOnly", "ShowWarning" };
 	public IReadOnlyList<string> KeyboardFallbackOptions { get; } = new[] { "None", "Enter", "CtrlEnter" };
+	public IReadOnlyList<string> PaneDisplayModeOptions { get; } = new[] { "TwoPane", "LeftPane", "RightPane" };
 	public IReadOnlyList<string> RightPaneSelectedTabOptions { get; } = new[] { "History", "Template" };
 
 	public SettingsWindowViewModel(ISettingsService settingsService)
@@ -416,9 +435,15 @@ public partial class SettingsWindowViewModel : ObservableObject
 
 		var uiState = config.Config.UiState;
 		ActiveLeftTabIndex = uiState.ActiveLeftTabIndex;
+		PaneDisplayMode = uiState.PaneDisplayMode;
 		RightPaneSelectedTab = uiState.RightPaneSelectedTab;
 		UiStateIsDarkTheme = uiState.IsDarkTheme;
 		UiStateExecuteAfterSend = uiState.ExecuteAfterSend;
+		UiStateWindowWidth = uiState.WindowWidth;
+		UiStateWindowHeight = uiState.WindowHeight;
+		UiStateWindowLeft = uiState.WindowLeft;
+		UiStateWindowTop = uiState.WindowTop;
+		UiStateRestoreWindowPosition = uiState.RestoreWindowPosition;
 
 		LeftPaneTabs.Clear();
 		foreach (var tab in uiState.LeftPaneTabs)
@@ -480,9 +505,15 @@ public partial class SettingsWindowViewModel : ObservableObject
 				UiState = new UiStateSettings
 				{
 					ActiveLeftTabIndex = ActiveLeftTabIndex,
+					PaneDisplayMode = PaneDisplayMode,
 					RightPaneSelectedTab = RightPaneSelectedTab,
 					IsDarkTheme = UiStateIsDarkTheme,
 					ExecuteAfterSend = UiStateExecuteAfterSend,
+					WindowWidth = UiStateWindowWidth,
+					WindowHeight = UiStateWindowHeight,
+					WindowLeft = UiStateWindowLeft,
+					WindowTop = UiStateWindowTop,
+					RestoreWindowPosition = UiStateRestoreWindowPosition,
 					LeftPaneTabs = LeftPaneTabs
 						.Select(item => new LeftPaneTabState
 						{
