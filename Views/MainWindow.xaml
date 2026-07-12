@@ -152,18 +152,19 @@
                             BorderThickness="1"
                             Focusable="False"
                             Cursor="Hand"
-                            ToolTip="すべてのタブを等分表示"
+                            ToolTip="現在: タブ表示。クリックすると縦分割に切り替えます"
+                            AutomationProperties.Name="現在: タブ表示。クリックすると縦分割に切り替えます"
                             Click="ToggleTabDisplayModeButton_Click">
                         <StackPanel Orientation="Horizontal"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center">
                             <materialDesign:PackIcon x:Name="ToggleTabDisplayModeIcon"
-                                                     Kind="ViewColumnOutline"
+                                                     Kind="Tab"
                                                      Width="20"
                                                      Height="20"
                                                      Margin="0,0,4,0" />
                             <TextBlock x:Name="ToggleTabDisplayModeText"
-                                       Text="等分表示"
+                                       Text="タブ表示"
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -202,7 +203,7 @@
                     </TabControl.ItemContainerStyle>
                 </TabControl>
 
-                <Grid x:Name="EqualTabContentHost"
+                <Grid x:Name="SplitTabContentHost"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
                       ClipToBounds="True"
