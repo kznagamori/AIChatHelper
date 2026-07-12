@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -18,6 +19,16 @@ namespace AIChatHelper.Views;
 
 public partial class MainWindow : Window
 {
+	/// <summary>
+	/// 左ペイン内のチャット内容をどの方向で表示するかを表します。
+	/// </summary>
+	private enum LeftPaneContentDisplayMode
+	{
+		Tab,
+		VerticalSplit,
+		HorizontalSplit
+	}
+
 	public static readonly DependencyProperty ActiveChatCommandTargetProperty =
 		DependencyProperty.Register(
 			nameof(ActiveChatCommandTarget),
@@ -36,7 +47,7 @@ public partial class MainWindow : Window
 	private AvalonTextEditor? _avalonEditor;
 	private ViewModels.MainWindowViewModel? _mainViewModel;
 	private ChatTabViewState? _activeChatTabState;
-	private bool _isEqualContentDisplayMode;
+	private LeftPaneContentDisplayMode _leftPaneContentDisplayMode = LeftPaneContentDisplayMode.Tab;
 	private bool _isUpdatingSelection;
 	private bool _suppressUiStateSave = true;
 	private bool _isSettingsWindowOpen;
@@ -62,9 +73,9 @@ public partial class MainWindow : Window
 		public string DisplayName { get; }
 		public TabItem TabItem { get; }
 		public Grid ContentElement { get; }
-		public Border? EqualColumnBorder { get; set; }
-		public ContentControl? EqualContentHost { get; set; }
-		public Button? EqualCloseButton { get; set; }
+		public Border? SplitPaneBorder { get; set; }
+		public ContentControl? SplitContentHost { get; set; }
+		public Button? SplitCloseButton { get; set; }
 	}
 
 	public MainWindow()
@@ -137,7 +148,12 @@ public partial class MainWindow : Window
 
 	private void ToggleTabDisplayModeButton_Click(object sender, RoutedEventArgs e)
 	{
-		_isEqualContentDisplayMode = !_isEqualContentDisplayMode;
+		_leftPaneContentDisplayMode = _leftPaneContentDisplayMode switch
+		{
+			LeftPaneContentDisplayMode.Tab => LeftPaneContentDisplayMode.VerticalSplit,
+			LeftPaneContentDisplayMode.VerticalSplit => LeftPaneContentDisplayMode.HorizontalSplit,
+			_ => LeftPaneContentDisplayMode.Tab
+		};
 		ApplyLeftPaneDisplayMode();
 	}
 
@@ -185,7 +201,7 @@ public partial class MainWindow : Window
 			SetActiveChatTab(tabState);
 		}
 
-		if (_isEqualContentDisplayMode)
+		if (_leftPaneContentDisplayMode != LeftPaneContentDisplayMode.Tab)
 		{
 			ApplyLeftPaneDisplayMode();
 		}
@@ -461,7 +477,7 @@ public partial class MainWindow : Window
 		}
 
 		DetachTabHeaderEvents(tabItem);
-		DetachEqualTabColumn(tabState);
+		DetachSplitPane(tabState);
 
 		if (ReferenceEquals(tabItem.Content, tabState.ContentElement))
 		{
@@ -633,7 +649,7 @@ public partial class MainWindow : Window
 			}
 		}
 
-		UpdateEqualColumnActiveStates();
+		UpdateSplitPaneActiveStates();
 		RequestDebouncedUiStateSave();
 	}
 
@@ -655,62 +671,112 @@ public partial class MainWindow : Window
 		SetActiveChatTab(_chatTabStates.FirstOrDefault());
 	}
 
+	/// <summary>
+	/// 現在選択されている左ペイン表示モードを画面へ適用します。
+	/// </summary>
 	private void ApplyLeftPaneDisplayMode()
 	{
 		EnsureActiveChatTab();
 		UpdateTabDisplayModeButton();
 
-		if (_isEqualContentDisplayMode)
+		switch (_leftPaneContentDisplayMode)
 		{
-			ShowEqualContentDisplay();
-			return;
+			case LeftPaneContentDisplayMode.VerticalSplit:
+			case LeftPaneContentDisplayMode.HorizontalSplit:
+				ShowSplitContentDisplay(_leftPaneContentDisplayMode);
+				break;
+			default:
+				ShowNormalTabDisplay();
+				break;
 		}
-
-		ShowNormalTabDisplay();
 	}
 
-	private void ShowEqualContentDisplay()
+	/// <summary>
+	/// すべてのチャットタブを指定された方向へ等分表示します。
+	/// </summary>
+	/// <param name="displayMode">縦分割または横分割。</param>
+	private void ShowSplitContentDisplay(LeftPaneContentDisplayMode displayMode)
 	{
-		ClearEqualContentColumns();
-		EqualTabContentHost.ColumnDefinitions.Clear();
-
-		foreach (var tabState in _chatTabStates)
+		if (displayMode is not LeftPaneContentDisplayMode.VerticalSplit
+			and not LeftPaneContentDisplayMode.HorizontalSplit)
 		{
+			throw new ArgumentOutOfRangeException(nameof(displayMode));
+		}
+
+		ClearSplitPanes();
+
+		if (displayMode == LeftPaneContentDisplayMode.VerticalSplit)
+		{
+			SplitTabContentHost.RowDefinitions.Add(new RowDefinition
+			{
+				Height = new GridLength(1, GridUnitType.Star)
+			});
+		}
+		else
+		{
+			SplitTabContentHost.ColumnDefinitions.Add(new ColumnDefinition
+			{
+				Width = new GridLength(1, GridUnitType.Star)
+			});
+		}
+
+		for (var index = 0; index < _chatTabStates.Count; index++)
+		{
+			var tabState = _chatTabStates[index];
 			if (ReferenceEquals(tabState.TabItem.Content, tabState.ContentElement))
 			{
 				tabState.TabItem.Content = null;
 			}
+
+			// WPF要素は複数の親を持てないため、現在の親から外してから分割ペインへ移す。
 			DetachContentElement(tabState.ContentElement);
 
-			EqualTabContentHost.ColumnDefinitions.Add(new ColumnDefinition
+			var pane = CreateSplitPane(tabState);
+			if (displayMode == LeftPaneContentDisplayMode.VerticalSplit)
 			{
-				Width = new GridLength(1, GridUnitType.Star)
-			});
+				SplitTabContentHost.ColumnDefinitions.Add(new ColumnDefinition
+				{
+					Width = new GridLength(1, GridUnitType.Star)
+				});
+				Grid.SetColumn(pane, index);
+				Grid.SetRow(pane, 0);
+			}
+			else
+			{
+				SplitTabContentHost.RowDefinitions.Add(new RowDefinition
+				{
+					Height = new GridLength(1, GridUnitType.Star)
+				});
+				Grid.SetColumn(pane, 0);
+				Grid.SetRow(pane, index);
+			}
 
-			var column = CreateEqualTabColumn(tabState);
-			Grid.SetColumn(column, EqualTabContentHost.ColumnDefinitions.Count - 1);
-			EqualTabContentHost.Children.Add(column);
+			SplitTabContentHost.Children.Add(pane);
 		}
 
 		TabControlMain.Visibility = Visibility.Collapsed;
-		EqualTabContentHost.Visibility = Visibility.Visible;
-		UpdateEqualColumnActiveStates();
+		SplitTabContentHost.Visibility = Visibility.Visible;
+		UpdateSplitPaneActiveStates();
 	}
 
+	/// <summary>
+	/// 分割ペイン内のチャット内容を元のタブへ戻します。
+	/// </summary>
 	private void ShowNormalTabDisplay()
 	{
-		ClearEqualContentColumns();
+		ClearSplitPanes();
 
 		foreach (var tabState in _chatTabStates)
 		{
 			if (!ReferenceEquals(tabState.TabItem.Content, tabState.ContentElement))
 			{
+				// 分割ペインから外した後に、元のTabItemへ同じContentElementを戻す。
 				DetachContentElement(tabState.ContentElement);
 				tabState.TabItem.Content = tabState.ContentElement;
 			}
 		}
 
-		EqualTabContentHost.Visibility = Visibility.Collapsed;
+		SplitTabContentHost.Visibility = Visibility.Collapsed;
 		TabControlMain.Visibility = Visibility.Visible;
 
 		if (_activeChatTabState != null)
@@ -719,27 +785,32 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private Border CreateEqualTabColumn(ChatTabViewState tabState)
+	/// <summary>
+	/// 1つのチャットタブを表示する分割ペインを生成します。
+	/// </summary>
+	/// <param name="tabState">表示対象のチャットタブ状態。</param>
+	/// <returns>ヘッダーとチャット内容を持つ分割ペイン。</returns>
+	private Border CreateSplitPane(ChatTabViewState tabState)
 	{
 		var border = new Border
 		{
 			BorderThickness = new Thickness(1),
-			BorderBrush = GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray),
 			Background = Brushes.Transparent,
 			HorizontalAlignment = HorizontalAlignment.Stretch,
 			VerticalAlignment = VerticalAlignment.Stretch,
 			Tag = tabState
 		};
-		border.MouseLeftButtonDown += EqualTabColumn_MouseLeftButtonDown;
+		border.SetResourceReference(Border.BorderBrushProperty, "MaterialDesign.Brush.Divider");
+		border.MouseLeftButtonDown += SplitPane_MouseLeftButtonDown;
 
-		var columnGrid = new Grid
+		var paneGrid = new Grid
 		{
 			HorizontalAlignment = HorizontalAlignment.Stretch,
 			VerticalAlignment = VerticalAlignment.Stretch,
 			Tag = tabState
 		};
-		columnGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-		columnGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+		paneGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+		paneGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
 		var headerGrid = new Grid
 		{
@@ -757,6 +828,7 @@ public partial class MainWindow : Window
 			VerticalAlignment = VerticalAlignment.Center,
 			Margin = new Thickness(6, 0, 4, 0)
 		};
+		title.SetResourceReference(TextBlock.ForegroundProperty, "MaterialDesign.Brush.Foreground");
 		Grid.SetColumn(title, 0);
 
 		var closeButton = new Button
@@ -778,7 +850,7 @@ public partial class MainWindow : Window
 		{
 			closeButton.Style = closeButtonStyle;
 		}
-		closeButton.Click += EqualTabCloseButton_Click;
+		closeButton.Click += SplitPaneCloseButton_Click;
 		Grid.SetColumn(closeButton, 1);
 
 		headerGrid.Children.Add(title);
@@ -795,18 +867,18 @@ public partial class MainWindow : Window
 		};
 		Grid.SetRow(contentHost, 1);
 
-		columnGrid.Children.Add(headerGrid);
-		columnGrid.Children.Add(contentHost);
-		border.Child = columnGrid;
+		paneGrid.Children.Add(headerGrid);
+		paneGrid.Children.Add(contentHost);
+		border.Child = paneGrid;
 
-		tabState.EqualColumnBorder = border;
-		tabState.EqualContentHost = contentHost;
-		tabState.EqualCloseButton = closeButton;
+		tabState.SplitPaneBorder = border;
+		tabState.SplitContentHost = contentHost;
+		tabState.SplitCloseButton = closeButton;
 
 		return border;
 	}
 
-	private void EqualTabColumn_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	private void SplitPane_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
 		if (sender is FrameworkElement { Tag: ChatTabViewState tabState })
 		{
@@ -814,7 +886,7 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void EqualTabCloseButton_Click(object sender, RoutedEventArgs e)
+	private void SplitPaneCloseButton_Click(object sender, RoutedEventArgs e)
 	{
 		e.Handled = true;
 		if (sender is Button { Tag: ChatTabViewState tabState })
@@ -823,47 +895,51 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void ClearEqualContentColumns()
+	/// <summary>
+	/// 分割ペインと行・列定義を解除し、次の表示モードへ移行できる状態にします。
+	/// </summary>
+	private void ClearSplitPanes()
 	{
 		foreach (var tabState in _chatTabStates)
 		{
-			DetachEqualTabColumn(tabState);
+			DetachSplitPane(tabState);
 		}
 
-		EqualTabContentHost.Children.Clear();
-		EqualTabContentHost.ColumnDefinitions.Clear();
+		SplitTabContentHost.Children.Clear();
+		SplitTabContentHost.ColumnDefinitions.Clear();
+		SplitTabContentHost.RowDefinitions.Clear();
 	}
 
-	private void DetachEqualTabColumn(ChatTabViewState tabState)
+	private void DetachSplitPane(ChatTabViewState tabState)
 	{
-		if (tabState.EqualCloseButton != null)
+		if (tabState.SplitCloseButton != null)
 		{
-			tabState.EqualCloseButton.Click -= EqualTabCloseButton_Click;
-			tabState.EqualCloseButton.Tag = null;
+			tabState.SplitCloseButton.Click -= SplitPaneCloseButton_Click;
+			tabState.SplitCloseButton.Tag = null;
 		}
 
-		if (tabState.EqualColumnBorder != null)
+		if (tabState.SplitPaneBorder != null)
 		{
-			tabState.EqualColumnBorder.MouseLeftButtonDown -= EqualTabColumn_MouseLeftButtonDown;
-			if (tabState.EqualColumnBorder.Parent is Panel parentPanel)
+			tabState.SplitPaneBorder.MouseLeftButtonDown -= SplitPane_MouseLeftButtonDown;
+			if (tabState.SplitPaneBorder.Parent is Panel parentPanel)
 			{
-				parentPanel.Children.Remove(tabState.EqualColumnBorder);
+				parentPanel.Children.Remove(tabState.SplitPaneBorder);
 			}
-			tabState.EqualColumnBorder.Tag = null;
-			tabState.EqualColumnBorder.Child = null;
+			tabState.SplitPaneBorder.Tag = null;
+			tabState.SplitPaneBorder.Child = null;
 		}
 
-		if (tabState.EqualContentHost != null)
+		if (tabState.SplitContentHost != null)
 		{
-			if (ReferenceEquals(tabState.EqualContentHost.Content, tabState.ContentElement))
+			if (ReferenceEquals(tabState.SplitContentHost.Content, tabState.ContentElement))
 			{
-				tabState.EqualContentHost.Content = null;
+				tabState.SplitContentHost.Content = null;
 			}
-			tabState.EqualContentHost = null;
+			tabState.SplitContentHost = null;
 		}
 
-		tabState.EqualColumnBorder = null;
-		tabState.EqualCloseButton = null;
+		tabState.SplitPaneBorder = null;
+		tabState.SplitCloseButton = null;
 	}
 
 	private void DetachContentElement(FrameworkElement contentElement)
@@ -913,25 +989,31 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void UpdateEqualColumnActiveStates()
+	/// <summary>
+	/// アクティブな分割ペインをテーマ対応の枠線で強調します。
+	/// </summary>
+	private void UpdateSplitPaneActiveStates()
 	{
 		foreach (var tabState in _chatTabStates)
 		{
-			if (tabState.EqualColumnBorder == null)
+			if (tabState.SplitPaneBorder == null)
 			{
 				continue;
 			}
 
 			var isActive = ReferenceEquals(tabState, _activeChatTabState);
-			tabState.EqualColumnBorder.BorderThickness = isActive
+			tabState.SplitPaneBorder.BorderThickness = isActive
 				? new Thickness(2)
 				: new Thickness(1);
-			tabState.EqualColumnBorder.BorderBrush = isActive
-				? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
-				: GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray);
+			tabState.SplitPaneBorder.SetResourceReference(
+				Border.BorderBrushProperty,
+				isActive ? "MaterialDesign.Brush.Primary" : "MaterialDesign.Brush.Divider");
 		}
 	}
 
+	/// <summary>
+	/// 切替ボタンへ現在の表示モードと次の操作を反映します。
+	/// </summary>
 	private void UpdateTabDisplayModeButton()
 	{
 		if (ToggleTabDisplayModeButton == null || ToggleTabDisplayModeIcon == null || ToggleTabDisplayModeText == null)
@@ -939,27 +1021,52 @@ public partial class MainWindow : Window
 			return;
 		}
 
-		ToggleTabDisplayModeButton.ToolTip = _isEqualContentDisplayMode
-			? "通常のタブ表示に戻す"
-			: "すべてのタブを等分表示";
-		ToggleTabDisplayModeIcon.Kind = _isEqualContentDisplayMode
-			? PackIconKind.ViewAgendaOutline
-			: PackIconKind.ViewColumnOutline;
-		ToggleTabDisplayModeText.Text = _isEqualContentDisplayMode ? "タブ表示" : "等分表示";
-		ToggleTabDisplayModeButton.Foreground = _isEqualContentDisplayMode
-			? GetBrushResource("MaterialDesign.Brush.Primary.Foreground", SystemColors.HighlightTextBrush)
-			: GetBrushResource("MaterialDesign.Brush.Foreground", SystemColors.ControlTextBrush);
-		ToggleTabDisplayModeButton.Background = _isEqualContentDisplayMode
-			? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
-			: Brushes.Transparent;
-		ToggleTabDisplayModeButton.BorderBrush = _isEqualContentDisplayMode
-			? GetBrushResource("MaterialDesign.Brush.Primary", SystemColors.HighlightBrush)
-			: GetBrushResource("MaterialDesign.Brush.Divider", Brushes.Gray);
-	}
+		var (text, icon, toolTip, isSplitMode) = _leftPaneContentDisplayMode switch
+		{
+			LeftPaneContentDisplayMode.VerticalSplit => (
+				"縦分割",
+				PackIconKind.ViewColumnOutline,
+				"現在: 縦分割。クリックすると横分割に切り替えます",
+				true),
+			LeftPaneContentDisplayMode.HorizontalSplit => (
+				"横分割",
+				PackIconKind.ViewAgendaOutline,
+				"現在: 横分割。クリックするとタブ表示に切り替えます",
+				true),
+			_ => (
+				"タブ表示",
+				PackIconKind.Tab,
+				"現在: タブ表示。クリックすると縦分割に切り替えます",
+				false)
+		};
 
-	private Brush GetBrushResource(string resourceKey, Brush fallback)
-	{
-		return TryFindResource(resourceKey) as Brush ?? fallback;
+		ToggleTabDisplayModeButton.ToolTip = toolTip;
+		AutomationProperties.SetName(ToggleTabDisplayModeButton, toolTip);
+		ToggleTabDisplayModeIcon.Kind = icon;
+		ToggleTabDisplayModeText.Text = text;
+
+		// 動的リソース参照を使い、アプリ実行中のテーマ切替にも色を追従させる。
+		if (isSplitMode)
+		{
+			ToggleTabDisplayModeButton.SetResourceReference(
+				Control.ForegroundProperty,
+				"MaterialDesign.Brush.Primary.Foreground");
+			ToggleTabDisplayModeButton.SetResourceReference(
+				Control.BackgroundProperty,
+				"MaterialDesign.Brush.Primary");
+			ToggleTabDisplayModeButton.SetResourceReference(
+				Control.BorderBrushProperty,
+				"MaterialDesign.Brush.Primary");
+			return;
+		}
+
+		ToggleTabDisplayModeButton.SetResourceReference(
+			Control.ForegroundProperty,
+			"MaterialDesign.Brush.Foreground");
+		ToggleTabDisplayModeButton.Background = Brushes.Transparent;
+		ToggleTabDisplayModeButton.SetResourceReference(
+			Control.BorderBrushProperty,
+			"MaterialDesign.Brush.Divider");
 	}
 
 	private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -1278,11 +1385,6 @@ public partial class MainWindow : Window
 			// ViewModelに保存
 			viewModel.SaveColumnWidths(newLeftWidth, newRightWidth);
 		}
-
-		if (_isEqualContentDisplayMode)
-		{
-			ApplyLeftPaneDisplayMode();
-		}
 	}
 
 	// システムテーマを検出（起動時のみ使用）
@@ -1316,7 +1418,7 @@ public partial class MainWindow : Window
 		{
 			DisposeChatTab(tabState.TabItem);
 		}
-		ClearEqualContentColumns();
+		ClearSplitPanes();
 		TabControlMain.Items.Clear();
 		TabControlMain.PreviewKeyDown -= TabControlMain_PreviewKeyDown;
 		_uiStateSaveTimer.Tick -= UiStateSaveTimer_Tick;
