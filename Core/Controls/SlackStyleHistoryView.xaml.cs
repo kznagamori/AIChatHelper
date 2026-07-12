@@ -61,58 +61,127 @@ namespace AIChatHelper.Core.Controls
 			remove { RemoveHandler(HistoryItemDoubleClickedEvent, value); }
 		}
 
+		/// <summary>
+		/// 履歴コレクションを日付別のカードとして表示するコントロールを初期化します。
+		/// </summary>
 		public SlackStyleHistoryView()
 		{
 			InitializeComponent();
 
-			// コントロールがアンロードされる時にコレクション変更通知のサブスクリプションを解除
-			Unloaded += (s, e) =>
-			{
-				if (_notifyCollection != null)
-				{
-					_notifyCollection.CollectionChanged -= Collection_CollectionChanged;
-				}
-
-				if (_scrollTimer != null)
-				{
-					_scrollTimer.Stop();
-					_scrollTimer = null;
-				}
-			};
+			Loaded += SlackStyleHistoryView_Loaded;
+			Unloaded += SlackStyleHistoryView_Unloaded;
 
 			// スクロールイベントを監視してアイテムを動的に追加/削除
 			HistoryScrollViewer.ScrollChanged += HistoryScrollViewer_ScrollChanged;
+		}
 
-			// 初期化時にスクロールタイマーを設定
+		/// <summary>
+		/// コントロールの再表示時に、履歴監視と遅延スクロール処理を復元します。
+		/// </summary>
+		private void SlackStyleHistoryView_Loaded(object sender, RoutedEventArgs e)
+		{
+			SubscribeToHistoryItems();
+			EnsureScrollTimer();
+
+			// タブが非表示の間に追加された履歴を、現在のコレクションから再構築する。
+			// InitialRebuildWithLatestItems 内で、レイアウト完了後の最下部スクロールも予約される。
+			InitialRebuildWithLatestItems();
+		}
+
+		/// <summary>
+		/// コントロールが画面から外れたときに、外部イベントとタイマーを解放します。
+		/// </summary>
+		private void SlackStyleHistoryView_Unloaded(object sender, RoutedEventArgs e)
+		{
+			UnsubscribeFromHistoryItems();
+			DisposeScrollTimer();
+		}
+
+		/// <summary>
+		/// 現在の履歴コレクションを監視し、多重購読を防止します。
+		/// </summary>
+		private void SubscribeToHistoryItems()
+		{
+			UnsubscribeFromHistoryItems();
+
+			if (HistoryItems is not INotifyCollectionChanged notifyCollection)
+			{
+				return;
+			}
+
+			_notifyCollection = notifyCollection;
+			_notifyCollection.CollectionChanged += Collection_CollectionChanged;
+		}
+
+		/// <summary>
+		/// 現在監視している履歴コレクションからイベント購読を解除します。
+		/// </summary>
+		private void UnsubscribeFromHistoryItems()
+		{
+			if (_notifyCollection != null)
+			{
+				_notifyCollection.CollectionChanged -= Collection_CollectionChanged;
+				_notifyCollection = null;
+			}
+		}
+
+		/// <summary>
+		/// スクロール更新を間引くタイマーを、必要な場合にだけ生成します。
+		/// </summary>
+		private void EnsureScrollTimer()
+		{
+			if (_scrollTimer != null)
+			{
+				return;
+			}
+
 			_scrollTimer = new DispatcherTimer
 			{
 				Interval = TimeSpan.FromMilliseconds(200) // 200msのスロットリング
 			};
-			_scrollTimer.Tick += (s, e) =>
-			{
-				_scrollTimer.Stop();
-				UpdateVisibleItems();
-			};
+			_scrollTimer.Tick += ScrollTimer_Tick;
 		}
 
+		/// <summary>
+		/// スクロール更新タイマーを停止し、イベント参照を解放します。
+		/// </summary>
+		private void DisposeScrollTimer()
+		{
+			if (_scrollTimer == null)
+			{
+				return;
+			}
+
+			_scrollTimer.Stop();
+			_scrollTimer.Tick -= ScrollTimer_Tick;
+			_scrollTimer = null;
+		}
+
+		/// <summary>
+		/// スクロール停止後に、表示範囲へ必要な履歴要素を反映します。
+		/// </summary>
+		private void ScrollTimer_Tick(object? sender, EventArgs e)
+		{
+			_scrollTimer?.Stop();
+			UpdateVisibleItems();
+		}
+
+		/// <summary>
+		/// 履歴コレクションの差し替え時に、表示中のコントロールだけを再購読・再構築します。
+		/// </summary>
 		private static void OnHistoryItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
 		{
 			if (d is SlackStyleHistoryView view)
 			{
-				// 以前のコレクションからの通知を解除
-				if (e.OldValue is INotifyCollectionChanged oldCollection)
+				view.UnsubscribeFromHistoryItems();
+
+				// 未表示中は Loaded 時の再購読と再構築に任せる。
+				if (!view.IsLoaded)
 				{
-					oldCollection.CollectionChanged -= view.Collection_CollectionChanged;
+					return;
 				}
 
-				// 新しいコレクションの通知を購読
-				if (e.NewValue is INotifyCollectionChanged newCollection)
-				{
-					view._notifyCollection = newCollection;
-					newCollection.CollectionChanged += view.Collection_CollectionChanged;
-				}
-
-				// 最初は最新アイテムのみ表示
+				view.SubscribeToHistoryItems();
 				view.InitialRebuildWithLatestItems();
 			}
 		}
