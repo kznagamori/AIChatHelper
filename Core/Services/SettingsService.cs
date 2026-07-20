@@ -341,8 +341,6 @@ public class SettingsService : ISettingsService
 		builder.AppendLine();
 
 		builder.AppendLine("[Config.ExecuteAfterSendSettings]");
-		builder.AppendLine("# 送信後実行チェックボックスの初期状態");
-		builder.AppendLine($"DefaultEnabled = {ToTomlBoolean(config.Config.ExecuteAfterSendSettings.DefaultEnabled)}");
 		builder.AppendLine("# 実行ボタン探索の最大待ち時間");
 		builder.AppendLine($"ExecutionTimeoutMs = {config.Config.ExecuteAfterSendSettings.ExecutionTimeoutMs}");
 		builder.AppendLine("# 入力反映後、実行ボタン探索を始めるまでの待ち時間");
@@ -479,10 +477,10 @@ public class SettingsService : ISettingsService
 		builder.AppendLine("# true: 保存した WindowLeft / WindowTop を起動時に復元する");
 		builder.AppendLine($"RestoreWindowPosition = {ToTomlBoolean(uiState.RestoreWindowPosition)}");
 
+		builder.AppendLine();
+		builder.AppendLine("# true: ダーク固定、false: ライト固定。キー省略時は Windows の設定に合わせる。");
 		if (uiState.IsDarkTheme.HasValue)
 		{
-			builder.AppendLine();
-			builder.AppendLine("# true: ダークテーマ、false: ライトテーマ");
 			builder.AppendLine($"IsDarkTheme = {ToTomlBoolean(uiState.IsDarkTheme.Value)}");
 		}
 

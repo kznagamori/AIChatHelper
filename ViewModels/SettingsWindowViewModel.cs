@@ -10,6 +10,7 @@ using AIChatHelper.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using AppThemeMode = AIChatHelper.Models.ThemeMode;
 
 namespace AIChatHelper.ViewModels;
 
@@ -54,9 +55,6 @@ public partial class SettingsWindowViewModel : ObservableObject
 	private string _templateDirectory = string.Empty;
 
 	[ObservableProperty]
-	private bool _executeDefaultEnabled;
-
-	[ObservableProperty]
 	private int _executionTimeoutMs;
 
 	[ObservableProperty]
@@ -83,11 +81,14 @@ public partial class SettingsWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private string _rightPaneSelectedTab = "History";
 
+	/// <summary>
+	/// 基本設定と詳細設定で共有するテーマモードを取得または設定します。
+	/// </summary>
 	[ObservableProperty]
-	private bool? _uiStateIsDarkTheme;
+	private AppThemeMode _selectedThemeMode = AppThemeMode.System;
 
 	[ObservableProperty]
-	private bool? _uiStateExecuteAfterSend;
+	private bool _uiStateExecuteAfterSend;
 
 	[ObservableProperty]
 	private double? _uiStateWindowWidth;
@@ -120,6 +121,16 @@ public partial class SettingsWindowViewModel : ObservableObject
 	public IReadOnlyList<string> KeyboardFallbackOptions { get; } = new[] { "None", "Enter", "CtrlEnter" };
 	public IReadOnlyList<string> PaneDisplayModeOptions { get; } = new[] { "TwoPane", "LeftPane", "RightPane" };
 	public IReadOnlyList<string> RightPaneSelectedTabOptions { get; } = new[] { "History", "Template" };
+
+	/// <summary>
+	/// 設定画面で選択できるテーマモードを表示順で取得します。
+	/// </summary>
+	public IReadOnlyList<ThemeModeOption> ThemeModeOptions { get; } = new[]
+	{
+		new ThemeModeOption(AppThemeMode.System, "Windows の設定に合わせる"),
+		new ThemeModeOption(AppThemeMode.Light, "ライト"),
+		new ThemeModeOption(AppThemeMode.Dark, "ダーク")
+	};
 
 	public SettingsWindowViewModel(ISettingsService settingsService)
 	{
@@ -409,7 +420,6 @@ public partial class SettingsWindowViewModel : ObservableObject
 		TemplateDirectory = config.Config.TemplateSettings.TemplateDirectory ?? string.Empty;
 
 		var executeSettings = config.Config.ExecuteAfterSendSettings;
-		ExecuteDefaultEnabled = executeSettings.DefaultEnabled;
 		ExecutionTimeoutMs = executeSettings.ExecutionTimeoutMs;
 		PostInputDelayMs = executeSettings.PostInputDelayMs;
 		RetryIntervalMs = executeSettings.RetryIntervalMs;
@@ -449,8 +459,8 @@ public partial class SettingsWindowViewModel : ObservableObject
 		ActiveLeftTabIndex = uiState.ActiveLeftTabIndex;
 		PaneDisplayMode = uiState.PaneDisplayMode;
 		RightPaneSelectedTab = uiState.RightPaneSelectedTab;
-		UiStateIsDarkTheme = uiState.IsDarkTheme;
-		UiStateExecuteAfterSend = uiState.ExecuteAfterSend;
+		SelectedThemeMode = uiState.IsDarkTheme.ToThemeMode();
+		UiStateExecuteAfterSend = uiState.ExecuteAfterSend ?? false;
 		UiStateWindowWidth = uiState.WindowWidth;
 		UiStateWindowHeight = uiState.WindowHeight;
 		UiStateWindowLeft = uiState.WindowLeft;
@@ -504,7 +514,6 @@ public partial class SettingsWindowViewModel : ObservableObject
 				},
 				ExecuteAfterSendSettings = new ExecuteAfterSendSettings
 				{
-					DefaultEnabled = ExecuteDefaultEnabled,
 					ExecutionTimeoutMs = ExecutionTimeoutMs,
 					PostInputDelayMs = PostInputDelayMs,
 					RetryIntervalMs = RetryIntervalMs,
@@ -525,7 +534,7 @@ public partial class SettingsWindowViewModel : ObservableObject
 					ActiveLeftTabIndex = ActiveLeftTabIndex,
 					PaneDisplayMode = PaneDisplayMode,
 					RightPaneSelectedTab = RightPaneSelectedTab,
-					IsDarkTheme = UiStateIsDarkTheme,
+					IsDarkTheme = SelectedThemeMode.ToNullableBoolean(),
 					ExecuteAfterSend = UiStateExecuteAfterSend,
 					WindowWidth = UiStateWindowWidth,
 					WindowHeight = UiStateWindowHeight,

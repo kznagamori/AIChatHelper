@@ -15,6 +15,7 @@ using MaterialDesignThemes.Wpf;
 using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using AppThemeMode = AIChatHelper.Models.ThemeMode;
 
 namespace AIChatHelper.Views;
 
@@ -56,6 +57,7 @@ public partial class MainWindow : Window
 	private bool _restoreWindowPosition;
 	private bool _saveAndRestoreTabUrls;
 	private bool _alwaysRestoreInitialTabs;
+	private bool _isSystemThemeEventSubscribed;
 
 	public object? ActiveChatCommandTarget
 	{
@@ -120,15 +122,18 @@ public partial class MainWindow : Window
 		_mainGrid = (Grid)Content;
 
 		var config = settingsService.Load();
-		_restoreWindowPosition = config.Config.UiState?.RestoreWindowPosition ?? false;
+		var uiState = config.Config.UiState;
+		_restoreWindowPosition = uiState.RestoreWindowPosition;
 		_saveAndRestoreTabUrls = config.Config.TabRestoreSettings.SaveAndRestoreTabUrls;
 		_alwaysRestoreInitialTabs = config.Config.TabRestoreSettings.AlwaysRestoreInitialTabs;
-		RestoreWindowPlacement(config.Config.UiState);
+		RestoreWindowPlacement(uiState);
 
-		// 起動時のみOSのテーマを検出して、WebView2初期化前にViewModelへ反映
-		bool isDarkMode = config.Config.UiState?.IsDarkTheme ?? IsSystemInDarkMode();
-		viewModel.IsDarkTheme = isDarkMode;
+		// 保存モードと実効テーマを分離し、System の場合は Windows の現在値を適用する。
+		viewModel.SelectedThemeMode = uiState.IsDarkTheme.ToThemeMode();
+		ApplySelectedThemeMode(useLightFallback: true);
+		viewModel.ThemeModeChanged += MainViewModel_ThemeModeChanged;
 		viewModel.UiStateChanged += MainViewModel_UiStateChanged;
+		SubscribeToSystemThemeChanges();
 
 		TabControlMain.PreviewKeyDown += TabControlMain_PreviewKeyDown;
 		UpdateTabDisplayModeButton();
@@ -141,13 +146,13 @@ public partial class MainWindow : Window
 			ChatSiteComboBox.SelectedIndex = 0;
 		}
 
-		RestoreLeftPaneTabs(config.Config.UiState, _chatSites);
+		RestoreLeftPaneTabs(uiState, _chatSites);
 
 		// AvalonEditorの参照を取得
 		_avalonEditor = FindName("AvalonEditor") as AvalonTextEditor;
 
-		// テーマに合わせてAvalonEditorのテーマも設定
-		_avalonEditor?.ApplyTheme(isDarkMode);
+		// 初期テーマ決定時には未生成だったエディタへ、現在の実効テーマを適用する。
+		_avalonEditor?.ApplyTheme(viewModel.IsDarkTheme);
 
 		// ウィンドウがロードされた後に履歴ビューを最下部にスクロール
 		Loaded += MainWindow_Loaded;
@@ -1250,6 +1255,22 @@ public partial class MainWindow : Window
 		RequestDebouncedUiStateSave();
 	}
 
+	/// <summary>
+	/// テーマメニューで保存モードが変更された時に、対応する実効テーマを適用します。
+	/// </summary>
+	private void MainViewModel_ThemeModeChanged(object? sender, EventArgs e)
+	{
+		ApplySelectedThemeMode(useLightFallback: false);
+	}
+
+	/// <summary>
+	/// テーマを選択した後にポップアップを閉じます。
+	/// </summary>
+	private void ThemeMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		ThemeMenuButton.IsPopupOpen = false;
+	}
+
 	private void UiStateSaveTimer_Tick(object? sender, EventArgs e)
 	{
 		_uiStateSaveTimer.Stop();
@@ -1267,7 +1288,14 @@ public partial class MainWindow : Window
 		_uiStateSaveTimer.Start();
 	}
 
-	private void SaveCurrentUiStateImmediately(bool showErrorMessage = false)
+	/// <summary>
+	/// 現在の UI 状態を直ちに保存します。
+	/// </summary>
+	/// <param name="showErrorMessage">保存失敗時に警告を表示するかどうか。</param>
+	/// <param name="uiStateToPreserve">設定画面終了直後の保存で維持する、再読込済みの UI 状態。</param>
+	private void SaveCurrentUiStateImmediately(
+		bool showErrorMessage = false,
+		UiStateSettings? uiStateToPreserve = null)
 	{
 		if (_settingsService == null)
 		{
@@ -1277,7 +1305,7 @@ public partial class MainWindow : Window
 		try
 		{
 			_uiStateSaveTimer.Stop();
-			_settingsService.SaveUiState(CaptureUiState());
+			_settingsService.SaveUiState(CaptureUiState(uiStateToPreserve));
 		}
 		catch (Exception ex)
 		{
@@ -1294,7 +1322,12 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private UiStateSettings CaptureUiState()
+	/// <summary>
+	/// 実行中の画面から保存可能な UI 状態を取得します。
+	/// </summary>
+	/// <param name="uiStateToPreserve">画面へ適用できない値を直後の保存で維持するための UI 状態。</param>
+	/// <returns>settings.toml へ保存する UI 状態。</returns>
+	private UiStateSettings CaptureUiState(UiStateSettings? uiStateToPreserve = null)
 	{
 		var viewModel = _mainViewModel ?? DataContext as ViewModels.MainWindowViewModel;
 		var activeIndex = _activeChatTabState == null
@@ -1307,12 +1340,18 @@ public partial class MainWindow : Window
 			ActiveLeftTabIndex = activeIndex,
 			PaneDisplayMode = viewModel?.GetPaneDisplayMode() ?? "TwoPane",
 			RightPaneSelectedTab = NormalizeRightPaneSelectedTab(viewModel?.RightPaneSelectedTab),
-			IsDarkTheme = viewModel?.IsDarkTheme,
+			// System は null のまま保存し、現在の Windows テーマを固定値へ変換しない。
+			IsDarkTheme = viewModel == null ? null : viewModel.SelectedThemeMode.ToNullableBoolean(),
 			ExecuteAfterSend = viewModel?.ExecuteAfterSend,
 			WindowWidth = IsValidWindowDimension(windowBounds.Width) ? windowBounds.Width : null,
 			WindowHeight = IsValidWindowDimension(windowBounds.Height) ? windowBounds.Height : null,
-			WindowLeft = IsFinite(windowBounds.Left) ? windowBounds.Left : null,
-			WindowTop = IsFinite(windowBounds.Top) ? windowBounds.Top : null,
+			// 位置復元が無効なら座標を画面へ適用できないため、設定画面で保存された値を一度だけ維持する。
+			WindowLeft = uiStateToPreserve is { RestoreWindowPosition: false }
+				? uiStateToPreserve.WindowLeft
+				: IsFinite(windowBounds.Left) ? windowBounds.Left : null,
+			WindowTop = uiStateToPreserve is { RestoreWindowPosition: false }
+				? uiStateToPreserve.WindowTop
+				: IsFinite(windowBounds.Top) ? windowBounds.Top : null,
 			RestoreWindowPosition = _restoreWindowPosition,
 			LeftPaneTabs = _chatTabStates.Select(tabState => new LeftPaneTabState
 			{
@@ -1429,19 +1468,29 @@ public partial class MainWindow : Window
 		}
 		finally
 		{
+			// 設定画面で保存された全 UI 状態を先に適用し、古い画面値で上書きしない。
+			var reloadedUiState = ReloadUiStateOptions();
 			_isSettingsWindowOpen = false;
-			ReloadUiStateOptions();
-			SaveCurrentUiStateImmediately();
+			if (reloadedUiState != null)
+			{
+				SaveCurrentUiStateImmediately(uiStateToPreserve: reloadedUiState);
+			}
 		}
 	}
 
-	private void ReloadUiStateOptions()
+	/// <summary>
+	/// settings.toml から実行中に反映可能な UI 状態を再読込し、画面へまとめて適用します。
+	/// </summary>
+	/// <returns>再読込と適用が完了した UI 状態。失敗した場合は <see langword="null"/>。</returns>
+	private UiStateSettings? ReloadUiStateOptions()
 	{
 		if (_settingsService == null)
 		{
-			return;
+			return null;
 		}
 
+		var previousSuppressUiStateSave = _suppressUiStateSave;
+		_suppressUiStateSave = true;
 		try
 		{
 			var config = _settingsService.Load();
@@ -1450,11 +1499,36 @@ public partial class MainWindow : Window
 			_restoreWindowPosition = uiState.RestoreWindowPosition;
 			_saveAndRestoreTabUrls = tabRestoreSettings.SaveAndRestoreTabUrls;
 			_alwaysRestoreInitialTabs = tabRestoreSettings.AlwaysRestoreInitialTabs;
-			_mainViewModel?.ApplyPaneDisplayMode(uiState.PaneDisplayMode);
+
+			if (_mainViewModel != null)
+			{
+				_mainViewModel.SelectedThemeMode = uiState.IsDarkTheme.ToThemeMode();
+				_mainViewModel.ExecuteAfterSend = uiState.ExecuteAfterSend ?? false;
+				_mainViewModel.RightPaneSelectedTab = NormalizeRightPaneSelectedTab(uiState.RightPaneSelectedTab);
+				_mainViewModel.ApplyPaneDisplayMode(uiState.PaneDisplayMode);
+			}
+
+			if (_chatTabStates.Count > 0)
+			{
+				var activeTabIndex = Math.Clamp(uiState.ActiveLeftTabIndex, 0, _chatTabStates.Count - 1);
+				SetActiveChatTab(_chatTabStates[activeTabIndex]);
+			}
+			else
+			{
+				SetActiveChatTab(null);
+			}
+
+			RestoreWindowPlacement(uiState);
+			return uiState;
 		}
 		catch (Exception ex)
 		{
 			Debug.WriteLine($"UI状態設定の再読み込みに失敗しました: {ex.GetType().Name}");
+			return null;
+		}
+		finally
+		{
+			_suppressUiStateSave = previousSuppressUiStateSave;
 		}
 	}
 
@@ -1593,20 +1667,144 @@ public partial class MainWindow : Window
 		}
 	}
 
-	// システムテーマを検出（起動時のみ使用）
-	private bool IsSystemInDarkMode()
+	/// <summary>
+	/// 現在選択されているモードから実効テーマを決定し、画面全体へ適用します。
+	/// </summary>
+	/// <param name="useLightFallback">Windows テーマを取得できない場合にライトを適用するかどうか。</param>
+	private void ApplySelectedThemeMode(bool useLightFallback)
 	{
+		if (_mainViewModel == null)
+		{
+			return;
+		}
+
+		bool isDarkTheme;
+		switch (_mainViewModel.SelectedThemeMode)
+		{
+			case AppThemeMode.Dark:
+				isDarkTheme = true;
+				break;
+			case AppThemeMode.Light:
+				isDarkTheme = false;
+				break;
+			default:
+				if (!TryGetSystemDarkMode(out isDarkTheme))
+				{
+					if (!useLightFallback)
+					{
+						return;
+					}
+
+					isDarkTheme = false;
+				}
+				break;
+		}
+
+		ApplyEffectiveTheme(isDarkTheme);
+	}
+
+	/// <summary>
+	/// Material Design、AvalonEdit、初期化済み WebView2 へ同じ実効テーマを適用します。
+	/// </summary>
+	private void ApplyEffectiveTheme(bool isDarkTheme)
+	{
+		if (_mainViewModel != null)
+		{
+			_mainViewModel.IsDarkTheme = isDarkTheme;
+		}
+
+		var paletteHelper = new PaletteHelper();
+		var theme = paletteHelper.GetTheme();
+		theme.SetBaseTheme(isDarkTheme ? BaseTheme.Dark : BaseTheme.Light);
+		paletteHelper.SetTheme(theme);
+
+		_avalonEditor?.ApplyTheme(isDarkTheme);
+		foreach (var tabState in _chatTabStates)
+		{
+			if (tabState.WebView.CoreWebView2 == null)
+			{
+				continue;
+			}
+
+			try
+			{
+				tabState.WebView.CoreWebView2.Profile.PreferredColorScheme = isDarkTheme
+					? CoreWebView2PreferredColorScheme.Dark
+					: CoreWebView2PreferredColorScheme.Light;
+			}
+			catch (Exception ex)
+			{
+				Debug.WriteLine($"WebView2テーマ設定エラー: {ex.GetType().Name}");
+			}
+		}
+	}
+
+	/// <summary>
+	/// Windows のアプリテーマ設定を読み取ります。
+	/// </summary>
+	/// <param name="isDarkMode">取得できた実効テーマ。</param>
+	/// <returns>設定を取得できた場合は true。それ以外は false。</returns>
+	private static bool TryGetSystemDarkMode(out bool isDarkMode)
+	{
+		isDarkMode = false;
 		try
 		{
 			using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-			if (key != null)
+			if (key?.GetValue("AppsUseLightTheme") is not int appsUseLightTheme)
 			{
-				var value = key.GetValue("AppsUseLightTheme");
-				return value != null && (int)value == 0;
+				Debug.WriteLine("Windowsテーマ設定を取得できませんでした。");
+				return false;
 			}
+
+			isDarkMode = appsUseLightTheme == 0;
+			return true;
 		}
-		catch { }
-		return false;
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"Windowsテーマ設定の取得に失敗しました: {ex.GetType().Name}");
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// Windows テーマ変更通知を一度だけ購読します。
+	/// </summary>
+	private void SubscribeToSystemThemeChanges()
+	{
+		if (_isSystemThemeEventSubscribed)
+		{
+			return;
+		}
+
+		SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+		_isSystemThemeEventSubscribed = true;
+	}
+
+	/// <summary>
+	/// Windows 追従中だけ、OS の設定変更に合わせて実効テーマを更新します。
+	/// </summary>
+	private void SystemEvents_UserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+	{
+		if (_mainViewModel?.SelectedThemeMode != AppThemeMode.System || Dispatcher.HasShutdownStarted)
+		{
+			return;
+		}
+
+		Dispatcher.BeginInvoke(() => ApplySelectedThemeMode(useLightFallback: false));
+	}
+
+	/// <summary>
+	/// 静的な Windows 通知イベントの購読を解除します。
+	/// </summary>
+	private void UnsubscribeFromSystemThemeChanges()
+	{
+		if (!_isSystemThemeEventSubscribed)
+		{
+			return;
+		}
+
+		SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged;
+		_isSystemThemeEventSubscribed = false;
 	}
 
 	protected override void OnClosed(EventArgs e)
@@ -1617,8 +1815,10 @@ public partial class MainWindow : Window
 
 		if (_mainViewModel != null)
 		{
+			_mainViewModel.ThemeModeChanged -= MainViewModel_ThemeModeChanged;
 			_mainViewModel.UiStateChanged -= MainViewModel_UiStateChanged;
 		}
+		UnsubscribeFromSystemThemeChanges();
 
 		foreach (var tabState in _chatTabStates.ToList())
 		{

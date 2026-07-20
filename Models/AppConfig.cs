@@ -52,7 +52,6 @@ public class TabRestoreSettings
 
 public class ExecuteAfterSendSettings
 {
-	public bool DefaultEnabled { get; set; } = false;
 	public int ExecutionTimeoutMs { get; set; } = 3000;
 	public int PostInputDelayMs { get; set; } = 100;
 	public int RetryIntervalMs { get; set; } = 100;

@@ -12,7 +12,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
-using MaterialDesignThemes.Wpf;
+using AppThemeMode = AIChatHelper.Models.ThemeMode;
 
 namespace AIChatHelper.ViewModels;
 
@@ -75,8 +75,33 @@ public partial class MainWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private Visibility _splitterVisibility = Visibility.Visible;
 
+	/// <summary>
+	/// 現在画面へ適用されている実効テーマがダークかどうかを取得または設定します。
+	/// Windows 追従時も、この値とは別に <see cref="SelectedThemeMode"/> を保持します。
+	/// </summary>
 	[ObservableProperty]
-	private bool isDarkTheme = true;
+	private bool _isDarkTheme;
+
+	/// <summary>
+	/// settings.toml へ保存するテーマモードを取得または設定します。
+	/// </summary>
+	[ObservableProperty]
+	private AppThemeMode _selectedThemeMode = AppThemeMode.System;
+
+	/// <summary>
+	/// Windows の設定に合わせるモードが選択されているかどうかを取得します。
+	/// </summary>
+	public bool IsSystemThemeMode => SelectedThemeMode == AppThemeMode.System;
+
+	/// <summary>
+	/// ライトテーマ固定が選択されているかどうかを取得します。
+	/// </summary>
+	public bool IsLightThemeMode => SelectedThemeMode == AppThemeMode.Light;
+
+	/// <summary>
+	/// ダークテーマ固定が選択されているかどうかを取得します。
+	/// </summary>
+	public bool IsDarkThemeMode => SelectedThemeMode == AppThemeMode.Dark;
 
 	private readonly Core.Factory.IWindowFactory? _windowFactory;
 	private readonly IHistoryService _historyService;
@@ -91,6 +116,11 @@ public partial class MainWindowViewModel : ObservableObject
 	private String _templateTextForEditor = String.Empty;
 
 	public event EventHandler? UiStateChanged;
+
+	/// <summary>
+	/// 保存対象のテーマモードが変更されたことを通知します。
+	/// </summary>
+	public event EventHandler? ThemeModeChanged;
 
 	// DI で IHistoryService を受け取るコンストラクタ
 	public MainWindowViewModel(Core.Factory.IWindowFactory windowFactory,
@@ -109,9 +139,8 @@ public partial class MainWindowViewModel : ObservableObject
 
 		_insertTemplateTextOnClear = _config.Config.EditorSettings.InsertTemplateTextOnClear;
 		_templateTextForEditor = _config.Config.EditorSettings.TemplateTextForEditor;
-		ExecuteAfterSend = _config.Config.UiState?.ExecuteAfterSend
-			?? _config.Config.ExecuteAfterSendSettings?.DefaultEnabled
-			?? false;
+		SelectedThemeMode = _config.Config.UiState?.IsDarkTheme.ToThemeMode() ?? AppThemeMode.System;
+		ExecuteAfterSend = _config.Config.UiState?.ExecuteAfterSend ?? false;
 		RightPaneSelectedTab = NormalizeRightPaneSelectedTab(_config.Config.UiState?.RightPaneSelectedTab);
 		ApplyPaneDisplayMode(_config.Config.UiState?.PaneDisplayMode);
 
@@ -132,8 +161,12 @@ public partial class MainWindowViewModel : ObservableObject
 		ClearEditor();
 	}
 
-	partial void OnIsDarkThemeChanged(bool value)
+	partial void OnSelectedThemeModeChanged(AppThemeMode value)
 	{
+		OnPropertyChanged(nameof(IsSystemThemeMode));
+		OnPropertyChanged(nameof(IsLightThemeMode));
+		OnPropertyChanged(nameof(IsDarkThemeMode));
+		ThemeModeChanged?.Invoke(this, EventArgs.Empty);
 		UiStateChanged?.Invoke(this, EventArgs.Empty);
 	}
 
@@ -463,44 +496,23 @@ public partial class MainWindowViewModel : ObservableObject
 		}
 	}
 
+	/// <summary>
+	/// メイン画面のテーマメニューで選択されたモードを保存対象へ反映します。
+	/// </summary>
+	/// <param name="themeMode">選択されたテーマモード。</param>
 	[RelayCommand]
-	private void ToggleTheme()
+	private void SelectThemeMode(AppThemeMode themeMode)
 	{
-		// MaterialDesignのテーマを変更
-		var paletteHelper = new PaletteHelper();
-		var theme = paletteHelper.GetTheme();
-		theme.SetBaseTheme(IsDarkTheme ? BaseTheme.Dark : BaseTheme.Light);
-		paletteHelper.SetTheme(theme);
-
-		if (App.Current.MainWindow is Views.MainWindow mainWindow)
+		if (SelectedThemeMode == themeMode)
 		{
-			// AvalonEditorにテーマを適用
-			var avalonEditor = mainWindow.FindName("AvalonEditor") as Core.Controls.AvalonTextEditor;
-			avalonEditor?.ApplyTheme(IsDarkTheme);
-
-			// TabControlのすべてのタブ内のWebView2のテーマを変更
-			foreach (var grid in mainWindow.GetChatContentElements())
-			{
-				var webView = grid.Children.OfType<WebView2>().FirstOrDefault();
-				if (webView != null && webView.CoreWebView2 != null)
-				{
-					// ダークモード設定を適用
-					try
-					{
-						// WebView2のプリファレンス設定でダークモードを切り替え
-						webView.CoreWebView2.Profile.PreferredColorScheme =
-							IsDarkTheme
-								? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
-								: Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
-					}
-					catch (Exception ex)
-					{
-						// CoreWebView2がまだ初期化されていない場合などに例外が発生する可能性がある
-						Debug.WriteLine($"WebView2テーマ設定エラー: {ex.Message}");
-					}
-				}
-			}
+			// チェック済みのメニュー項目を再選択した場合も、表示上のチェックを復元する。
+			OnPropertyChanged(nameof(IsSystemThemeMode));
+			OnPropertyChanged(nameof(IsLightThemeMode));
+			OnPropertyChanged(nameof(IsDarkThemeMode));
+			return;
 		}
+
+		SelectedThemeMode = themeMode;
 	}
 
 	// クリアボタン

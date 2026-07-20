@@ -42,8 +42,6 @@ SaveAndRestoreTabUrls = false
 AlwaysRestoreInitialTabs = false
 
 [Config.ExecuteAfterSendSettings]
-# 送信後実行チェックボックスの初期状態
-DefaultEnabled = false
 # 実行ボタン探索の最大待ち時間
 ExecutionTimeoutMs = 3000
 # 入力反映後、実行ボタン探索を始めるまでの待ち時間
@@ -107,3 +105,6 @@ WindowTop = 100
 
 # true: 保存した WindowLeft / WindowTop を起動時に復元する
 RestoreWindowPosition = false
+
+# IsDarkTheme は、true: ダーク固定、false: ライト固定。キー省略時は Windows の設定に合わせる。
+# ExecuteAfterSend は、右ペインの「送信後実行」チェック状態。キー省略時は false。

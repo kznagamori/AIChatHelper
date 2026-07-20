@@ -7,10 +7,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <!-- 各種バージョン情報の指定 -->
-    <AssemblyVersion>2.0.1.0</AssemblyVersion>
-    <FileVersion>2.0.1.0</FileVersion>
-    <InformationalVersion>2.0.1</InformationalVersion>
-    <Version>1.1.0</Version>
+    <AssemblyVersion>2.0.2.0</AssemblyVersion>
+    <FileVersion>2.0.2.0</FileVersion>
+    <InformationalVersion>2.0.2</InformationalVersion>
+    <Version>2.0.2</Version>
     <!-- 追加のアプリケーション情報 -->
     <Product>AIChatHelper</Product>
     <Description>AI チャットサービスのためのヘルパーアプリケーション</Description>
