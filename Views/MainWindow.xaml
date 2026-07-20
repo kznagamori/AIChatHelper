@@ -411,54 +411,96 @@
                 </controls:AvalonTextEditor>
             </Grid>
 
-            <!-- 4行目：ボタン類 -->
+            <!-- 4行目：テーマ、送信設定、コマンドボタンを1段で配置する。 -->
             <Grid Grid.Row="3" Margin="0,8,0,0">
-                <DockPanel LastChildFill="False">
-                    <!-- 左寄せのコントロール -->
-                    <StackPanel DockPanel.Dock="Left"
-                                Orientation="Horizontal"
-                                Margin="0,0,8,0">
-                        <ToggleButton x:Name="ThemeToggleButton"
-                            ToolTip="ダーク/ライトテーマ切替"
-                            Command="{Binding ToggleThemeCommand}"
-                            IsChecked="{Binding IsDarkTheme}">
-                        </ToggleButton>
-                    </StackPanel>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                    <!-- 右寄せのコントロール -->
-                    <StackPanel DockPanel.Dock="Right"
-                                Orientation="Horizontal"
-                                Margin="0,0,8,0">
-                        <CheckBox Content="送信後実行"
-                                  IsChecked="{Binding ExecuteAfterSend, Mode=TwoWay}"
-                                  IsEnabled="{Binding IsSendingNot}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,12,0"
-                                  ToolTip="チェック時は、入力後にサービス側の実行ボタンも押します" />
-                        <Button Content="{Binding ChatButtonText}"
+                <!-- テーマ固定と Windows 追従を、名称が分かる1つのメニューから選択する。 -->
+                <materialDesign:PopupBox x:Name="ThemeMenuButton"
+                                         Grid.Column="0"
+                                         MinWidth="96"
+                                         Height="40"
+                                         ToolTip="テーマ"
+                                         AutomationProperties.Name="テーマを選択"
+                                         PlacementMode="TopAndAlignLeftEdges"
+                                         StaysOpen="False">
+                    <materialDesign:PopupBox.ToggleContent>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="ThemeLightDark"
+                                                     Width="22"
+                                                     Height="22"
+                                                     VerticalAlignment="Center" />
+                            <TextBlock Text="テーマ"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="NoWrap" />
+                        </StackPanel>
+                    </materialDesign:PopupBox.ToggleContent>
+                    <materialDesign:PopupBox.PopupContent>
+                        <!-- 固定上限を設けず、長いテーマ名や文字拡大時は内容に合わせて広げる。 -->
+                        <StackPanel MinWidth="300">
+                            <MenuItem Header="Windows の設定に合わせる"
+                                      IsCheckable="True"
+                                      IsChecked="{Binding IsSystemThemeMode, Mode=OneWay}"
+                                      Command="{Binding SelectThemeModeCommand}"
+                                      CommandParameter="{x:Static models:ThemeMode.System}"
+                                      Click="ThemeMenuItem_Click" />
+                            <MenuItem Header="ライト"
+                                      IsCheckable="True"
+                                      IsChecked="{Binding IsLightThemeMode, Mode=OneWay}"
+                                      Command="{Binding SelectThemeModeCommand}"
+                                      CommandParameter="{x:Static models:ThemeMode.Light}"
+                                      Click="ThemeMenuItem_Click" />
+                            <MenuItem Header="ダーク"
+                                      IsCheckable="True"
+                                      IsChecked="{Binding IsDarkThemeMode, Mode=OneWay}"
+                                      Command="{Binding SelectThemeModeCommand}"
+                                      CommandParameter="{x:Static models:ThemeMode.Dark}"
+                                      Click="ThemeMenuItem_Click" />
+                        </StackPanel>
+                    </materialDesign:PopupBox.PopupContent>
+                </materialDesign:PopupBox>
+
+                <!-- 送信設定と実行コマンドは同じ順序で右寄せ表示する。 -->
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,0,8,0">
+                    <CheckBox Content="送信後実行"
+                              IsChecked="{Binding ExecuteAfterSend, Mode=TwoWay}"
+                              IsEnabled="{Binding IsSendingNot}"
+                              VerticalAlignment="Center"
+                              Margin="0,0,12,0"
+                              ToolTip="チェック時は、入力後にサービス側の実行ボタンも押します" />
+                    <Button Content="{Binding ChatButtonText}"
                             Width="120"
                             Command="{Binding ChatToServiceCommand}"
                             CommandParameter="{Binding ElementName=RootWindow, Path=ActiveChatCommandTarget}"
                             Margin="0,0,8,0"
                             Style="{StaticResource MaterialDesignPaperButton}"
                             IsEnabled="{Binding IsSendingNot}" />
-                        <Button Content="クリア"
+                    <Button Content="クリア"
                             Width="120"
                             Command="{Binding ClearEditorCommand}"
                             Style="{StaticResource MaterialDesignPaperButton}"
                             Margin="0,0,8,0" />
-                        <Button Content="保存"
+                    <Button Content="保存"
                             Width="120"
                             Command="{Binding SaveHistoryCommand}"
                             Style="{StaticResource MaterialDesignPaperButton}"
                             Margin="0,0,8,0" />
-                        <Button Content="ファイルに保存"
+                    <Button Content="ファイルに保存"
                             Width="120"
                             Command="{Binding SaveHistoryToFileCommand}"
                             Style="{StaticResource MaterialDesignPaperButton}"
                             Margin="0,0,8,0" />
-                    </StackPanel>
-                </DockPanel>
+                </StackPanel>
             </Grid>
         </Grid>
 

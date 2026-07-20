@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Text;
 using Tomlet;
+using AIChatHelper.Core.Helper;
 using AIChatHelper.Models;
 
 namespace AIChatHelper.Core.Services;
@@ -52,6 +53,7 @@ public class SettingsService : ISettingsService
 		config.Config.InputSelectors ??= new List<string>();
 		config.Config.EditorSettings ??= new EditorSettings();
 		config.Config.TemplateSettings ??= new TemplateSettings();
+		config.Config.TabRestoreSettings ??= new TabRestoreSettings();
 		config.Config.ExecuteAfterSendSettings ??= new ExecuteAfterSendSettings();
 		config.Config.ExecuteAfterSendSettings.ServiceExecutors ??= new List<ServiceExecutorSettings>();
 		config.Config.UiState ??= new UiStateSettings();
@@ -127,6 +129,7 @@ public class SettingsService : ISettingsService
 		}
 
 		var uiState = config.Config.UiState;
+		var tabRestoreSettings = config.Config.TabRestoreSettings;
 		uiState.ActiveLeftTabIndex = Math.Max(0, uiState.ActiveLeftTabIndex);
 		uiState.PaneDisplayMode = NormalizePaneDisplayMode(uiState.PaneDisplayMode);
 		uiState.RightPaneSelectedTab = NormalizeRightPaneSelectedTab(uiState.RightPaneSelectedTab);
@@ -140,10 +143,30 @@ public class SettingsService : ISettingsService
 			{
 				SiteName = (tab.SiteName ?? string.Empty).Trim(),
 				Url = (tab.Url ?? string.Empty).Trim(),
-				DisplayName = (tab.DisplayName ?? string.Empty).Trim()
+				DisplayName = (tab.DisplayName ?? string.Empty).Trim(),
+				CurrentUrl = (tab.CurrentUrl ?? string.Empty).Trim()
 			})
 			.Where(tab => !string.IsNullOrWhiteSpace(tab.Url))
 			.ToList();
+
+		foreach (var tab in uiState.LeftPaneTabs)
+		{
+			if (!tabRestoreSettings.SaveAndRestoreTabUrls || tabRestoreSettings.AlwaysRestoreInitialTabs)
+			{
+				tab.CurrentUrl = string.Empty;
+				continue;
+			}
+
+			var site = ChatTabUrlPolicy.FindMatchingSite(tab, config.ChatSites);
+			if (site == null || !ChatTabUrlPolicy.TryGetRestorableUri(site, tab.CurrentUrl, out var currentUri))
+			{
+				// 不正な URL だけを破棄し、他のタブ状態と設定の読み込みは継続する。
+				tab.CurrentUrl = string.Empty;
+				continue;
+			}
+
+			tab.CurrentUrl = currentUri.AbsoluteUri;
+		}
 
 		return config;
 	}
@@ -158,8 +181,16 @@ public class SettingsService : ISettingsService
 
 	public void SaveUiState(UiStateSettings uiState)
 	{
+		ArgumentNullException.ThrowIfNull(uiState);
+
 		var currentText = ReadRaw();
-		var updatedText = ReplaceUiStateSection(currentText, uiState);
+		var currentConfig = ValidateRaw(currentText);
+		currentConfig.Config ??= new Config();
+		currentConfig.Config.UiState = uiState;
+
+		// UI 状態だけを保存する経路でも、設定全体と同じ URL ポリシーを適用する。
+		var validatedUiState = Validate(currentConfig).Config.UiState;
+		var updatedText = ReplaceUiStateSection(currentText, validatedUiState);
 		ValidateRaw(updatedText);
 		SaveTextAtomically(updatedText);
 	}
@@ -302,9 +333,14 @@ public class SettingsService : ISettingsService
 		builder.AppendLine($"TemplateDirectory = \"{EscapeTomlString(config.Config.TemplateSettings.TemplateDirectory)}\"");
 		builder.AppendLine();
 
+		builder.AppendLine("[Config.TabRestoreSettings]");
+		builder.AppendLine("# true: 許可された登録サイト URL をタブごとに保存し、次回起動時に復元する");
+		builder.AppendLine($"SaveAndRestoreTabUrls = {ToTomlBoolean(config.Config.TabRestoreSettings.SaveAndRestoreTabUrls)}");
+		builder.AppendLine("# true: 保存済みタブより優先して、ChatSites を初期 URL で各 1 タブ開く");
+		builder.AppendLine($"AlwaysRestoreInitialTabs = {ToTomlBoolean(config.Config.TabRestoreSettings.AlwaysRestoreInitialTabs)}");
+		builder.AppendLine();
+
 		builder.AppendLine("[Config.ExecuteAfterSendSettings]");
-		builder.AppendLine("# 送信後実行チェックボックスの初期状態");
-		builder.AppendLine($"DefaultEnabled = {ToTomlBoolean(config.Config.ExecuteAfterSendSettings.DefaultEnabled)}");
 		builder.AppendLine("# 実行ボタン探索の最大待ち時間");
 		builder.AppendLine($"ExecutionTimeoutMs = {config.Config.ExecuteAfterSendSettings.ExecutionTimeoutMs}");
 		builder.AppendLine("# 入力反映後、実行ボタン探索を始めるまでの待ち時間");
@@ -441,10 +477,10 @@ public class SettingsService : ISettingsService
 		builder.AppendLine("# true: 保存した WindowLeft / WindowTop を起動時に復元する");
 		builder.AppendLine($"RestoreWindowPosition = {ToTomlBoolean(uiState.RestoreWindowPosition)}");
 
+		builder.AppendLine();
+		builder.AppendLine("# true: ダーク固定、false: ライト固定。キー省略時は Windows の設定に合わせる。");
 		if (uiState.IsDarkTheme.HasValue)
 		{
-			builder.AppendLine();
-			builder.AppendLine("# true: ダークテーマ、false: ライトテーマ");
 			builder.AppendLine($"IsDarkTheme = {ToTomlBoolean(uiState.IsDarkTheme.Value)}");
 		}
 
@@ -467,6 +503,10 @@ public class SettingsService : ISettingsService
 			builder.AppendLine($"SiteName = \"{EscapeTomlString(tab.SiteName)}\"");
 			builder.AppendLine($"Url = \"{EscapeTomlString(tab.Url)}\"");
 			builder.AppendLine($"DisplayName = \"{EscapeTomlString(tab.DisplayName)}\"");
+			if (!string.IsNullOrWhiteSpace(tab.CurrentUrl))
+			{
+				builder.AppendLine($"CurrentUrl = \"{EscapeTomlString(tab.CurrentUrl)}\"");
+			}
 		}
 
 		return builder.ToString();

@@ -56,6 +56,142 @@
             <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Foreground}" />
             <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Background}" />
         </Style>
+
+		<!-- 基本設定と詳細設定で同じ編集データと操作を共有する設定群。 -->
+		<DataTemplate x:Key="ChatSitesSettingsTemplate">
+			<Grid>
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="*" />
+				</Grid.RowDefinitions>
+				<StackPanel Grid.Row="0"
+				            Orientation="Horizontal"
+				            HorizontalAlignment="Right"
+				            Margin="0,0,0,8">
+					<Button Command="{Binding AddChatSiteCommand}"
+					        ToolTip="追加"
+					        Style="{StaticResource SettingsIconButtonStyle}">
+						<materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
+					</Button>
+					<Button Command="{Binding RemoveChatSiteCommand}"
+					        ToolTip="削除"
+					        Style="{StaticResource SettingsIconButtonStyle}">
+						<materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
+					</Button>
+					<Button Command="{Binding MoveChatSiteUpCommand}"
+					        ToolTip="上へ"
+					        Style="{StaticResource SettingsIconButtonStyle}">
+						<materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
+					</Button>
+					<Button Command="{Binding MoveChatSiteDownCommand}"
+					        ToolTip="下へ"
+					        Style="{StaticResource SettingsIconButtonStyle}">
+						<materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
+					</Button>
+				</StackPanel>
+				<DataGrid Grid.Row="1"
+				          Style="{StaticResource SettingsDataGridStyle}"
+				          ItemsSource="{Binding ChatSites}"
+				          SelectedItem="{Binding SelectedChatSite, Mode=TwoWay}"
+				          AutoGenerateColumns="False"
+				          CanUserAddRows="False"
+				          CanUserDeleteRows="False"
+				          CanUserSortColumns="False"
+				          HeadersVisibility="Column"
+				          Background="{DynamicResource MaterialDesign.Brush.Background}"
+				          Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
+					<DataGrid.Columns>
+						<DataGridTextColumn Header="Name"
+						                    Width="220"
+						                    ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+						                    EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+						                    Binding="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+						<DataGridTextColumn Header="Url"
+						                    Width="*"
+						                    ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+						                    EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
+						                    Binding="{Binding Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+					</DataGrid.Columns>
+				</DataGrid>
+			</Grid>
+		</DataTemplate>
+
+		<DataTemplate x:Key="EditorSettingsTemplate">
+			<Grid>
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="*" />
+				</Grid.RowDefinitions>
+				<CheckBox Grid.Row="0"
+				          Content="テンプレート選択時に上書き確認を表示"
+				          IsChecked="{Binding ConfirmTemplateOverwrite, Mode=TwoWay}" />
+				<CheckBox Grid.Row="1"
+				          Content="履歴選択時に上書き確認を表示"
+				          IsChecked="{Binding ConfirmHistoryOverwrite, Mode=TwoWay}"
+				          Margin="0,8,0,0" />
+				<CheckBox Grid.Row="2"
+				          Content="エディタクリア時にテンプレートテキストを挿入"
+				          IsChecked="{Binding InsertTemplateTextOnClear, Mode=TwoWay}"
+				          Margin="0,8,0,0" />
+				<TextBlock Grid.Row="3"
+				           Text="テンプレートテキスト"
+				           FontWeight="SemiBold"
+				           Margin="0,16,0,6" />
+				<TextBox Grid.Row="4"
+				         Text="{Binding TemplateTextForEditor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+				         AcceptsReturn="True"
+				         AcceptsTab="True"
+				         TextWrapping="Wrap"
+				         VerticalScrollBarVisibility="Auto"
+				         Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
+				         Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+				         MinHeight="140"
+				         Padding="8" />
+			</Grid>
+		</DataTemplate>
+
+		<DataTemplate x:Key="TemplateDirectorySettingsTemplate">
+			<!-- 単一行入力が利用可能な高さへ引き伸ばされないよう、入力行を上寄せにする。 -->
+			<Grid VerticalAlignment="Top">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<TextBlock Grid.Column="0"
+				           Text="テンプレートディレクトリ"
+				           VerticalAlignment="Center"
+				           FontWeight="SemiBold"
+				           Margin="0,0,12,0" />
+				<TextBox Grid.Column="1"
+				         Text="{Binding TemplateDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+				         Style="{StaticResource SettingsSingleLineTextBoxStyle}"
+				         Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
+				         Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
+				         Margin="0,0,8,0" />
+				<Button Grid.Column="2"
+				        Command="{Binding BrowseTemplateDirectoryCommand}"
+				        ToolTip="フォルダーを選択"
+				        Style="{StaticResource SettingsIconButtonStyle}">
+					<materialDesign:PackIcon Kind="FolderOpenOutline" Width="22" Height="22" />
+				</Button>
+			</Grid>
+		</DataTemplate>
+
+		<DataTemplate x:Key="TabRestoreSettingsTemplate">
+			<StackPanel>
+				<CheckBox Content="前回開いていたページ URL を保存・復元する"
+				          IsChecked="{Binding SaveAndRestoreTabUrls, Mode=TwoWay}"
+				          ToolTip="登録 URL と同じドメイン内のページだけを settings.toml に保存して復元します"
+				          Margin="0,0,0,8" />
+				<CheckBox Content="起動時は常に登録済みチャットサイトへ戻す"
+				          IsChecked="{Binding AlwaysRestoreInitialTabs, Mode=TwoWay}"
+				          ToolTip="前回のタブ状態を使わず、ChatSites を登録順に各 1 タブずつ開きます。この設定が URL 保存・復元より優先されます" />
+			</StackPanel>
+		</DataTemplate>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -114,66 +250,93 @@
             </TextBlock>
         </Grid>
 
+        <!-- 上位タブの選択は保存せず、設定ウィンドウを開くたびに基本設定を表示する。 -->
         <TabControl Grid.Row="1"
+                    SelectedIndex="0"
                     Background="{DynamicResource MaterialDesign.Brush.Background}">
-            <TabItem Header="チャットサイト">
-                <Grid Margin="0,12,0,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <TabItem Header="基本設定">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,12,16,12">
+                    <StackPanel>
+                        <TextBlock Text="一般"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,12" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="240" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
+                                       Text="テーマ"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,8" />
+                            <ComboBox Grid.Row="0"
+                                      Grid.Column="1"
+                                      Width="300"
+                                      HorizontalAlignment="Left"
+                                      ItemsSource="{Binding ThemeModeOptions}"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedThemeMode, Mode=TwoWay}"
+                                      Style="{StaticResource SettingsComboBoxStyle}"
+                                      Margin="0,0,0,8" />
+                            <CheckBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Content="起動時にウィンドウ位置を復元する"
+                                      IsChecked="{Binding UiStateRestoreWindowPosition, Mode=TwoWay}" />
+                        </Grid>
 
-                    <StackPanel Grid.Row="0"
-                                Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                Margin="0,0,0,8">
-                        <Button Command="{Binding AddChatSiteCommand}"
-                                ToolTip="追加"
-                                Style="{StaticResource SettingsIconButtonStyle}">
-                            <materialDesign:PackIcon Kind="Plus" Width="20" Height="20" />
-                        </Button>
-                        <Button Command="{Binding RemoveChatSiteCommand}"
-                                ToolTip="削除"
-                                Style="{StaticResource SettingsIconButtonStyle}">
-                            <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20" />
-                        </Button>
-                        <Button Command="{Binding MoveChatSiteUpCommand}"
-                                ToolTip="上へ"
-                                Style="{StaticResource SettingsIconButtonStyle}">
-                            <materialDesign:PackIcon Kind="ArrowUp" Width="20" Height="20" />
-                        </Button>
-                        <Button Command="{Binding MoveChatSiteDownCommand}"
-                                ToolTip="下へ"
-                                Style="{StaticResource SettingsIconButtonStyle}">
-                            <materialDesign:PackIcon Kind="ArrowDown" Width="20" Height="20" />
-                        </Button>
+                        <Separator Margin="0,20,0,16" />
+                        <TextBlock Text="チャットサイト"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8" />
+                        <ContentControl Height="240"
+                                        Content="{Binding}"
+                                        ContentTemplate="{StaticResource ChatSitesSettingsTemplate}" />
+
+                        <Separator Margin="0,20,0,16" />
+                        <TextBlock Text="エディタ"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,12" />
+                        <ContentControl MinHeight="280"
+                                        Content="{Binding}"
+                                        ContentTemplate="{StaticResource EditorSettingsTemplate}" />
+
+                        <Separator Margin="0,20,0,16" />
+                        <TextBlock Text="テンプレート"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,12" />
+                        <ContentControl Content="{Binding}"
+                                        ContentTemplate="{StaticResource TemplateDirectorySettingsTemplate}" />
+
+                        <Separator Margin="0,20,0,16" />
+                        <TextBlock Text="タブ復元"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,12" />
+                        <ContentControl Content="{Binding}"
+                                        ContentTemplate="{StaticResource TabRestoreSettingsTemplate}" />
                     </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-                    <DataGrid Grid.Row="1"
-                              Style="{StaticResource SettingsDataGridStyle}"
-                              ItemsSource="{Binding ChatSites}"
-                              SelectedItem="{Binding SelectedChatSite, Mode=TwoWay}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              CanUserSortColumns="False"
-                              HeadersVisibility="Column"
-                              Background="{DynamicResource MaterialDesign.Brush.Background}"
-                              Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name"
-                                                Width="220"
-                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
-                                                EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
-                                                Binding="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <DataGridTextColumn Header="Url"
-                                                Width="*"
-                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
-                                                EditingElementStyle="{StaticResource SettingsDataGridTextBoxStyle}"
-                                                Binding="{Binding Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
+            <TabItem Header="詳細設定">
+                <TabControl Margin="0,8,0,0"
+                            Background="{DynamicResource MaterialDesign.Brush.Background}">
+            <TabItem Header="チャットサイト">
+				<ContentControl Margin="0,12,0,0"
+				                Content="{Binding}"
+				                ContentTemplate="{StaticResource ChatSitesSettingsTemplate}" />
             </TabItem>
 
             <TabItem Header="入力欄">
@@ -232,74 +395,15 @@
             </TabItem>
 
             <TabItem Header="エディタ">
-                <Grid Margin="0,16,0,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <CheckBox Grid.Row="0"
-                              Content="テンプレート選択時に上書き確認を表示"
-                              IsChecked="{Binding ConfirmTemplateOverwrite, Mode=TwoWay}" />
-                    <CheckBox Grid.Row="1"
-                              Content="履歴選択時に上書き確認を表示"
-                              IsChecked="{Binding ConfirmHistoryOverwrite, Mode=TwoWay}"
-                              Margin="0,8,0,0" />
-                    <CheckBox Grid.Row="2"
-                              Content="エディタクリア時にテンプレートテキストを挿入"
-                              IsChecked="{Binding InsertTemplateTextOnClear, Mode=TwoWay}"
-                              Margin="0,8,0,0" />
-                    <TextBlock Grid.Row="3"
-                               Text="テンプレートテキスト"
-                               FontWeight="SemiBold"
-                               Margin="0,16,0,6" />
-                    <TextBox Grid.Row="4"
-                             Text="{Binding TemplateTextForEditor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True"
-                             AcceptsTab="True"
-                             TextWrapping="Wrap"
-                             VerticalScrollBarVisibility="Auto"
-                             Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
-                             Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
-                             MinHeight="160"
-                             Padding="8" />
-                </Grid>
+				<ContentControl Margin="0,16,0,0"
+				                Content="{Binding}"
+				                ContentTemplate="{StaticResource EditorSettingsTemplate}" />
             </TabItem>
 
             <TabItem Header="テンプレート">
-                <!-- 単一行のパス入力がタブ全体の高さへ引き伸ばされないよう、入力行を上寄せにする。 -->
-                <Grid Margin="0,16,0,0"
-                      VerticalAlignment="Top">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Grid.Column="0"
-                               Text="テンプレートディレクトリ"
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Margin="0,0,12,0" />
-                    <TextBox Grid.Column="1"
-                             Text="{Binding TemplateDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource SettingsSingleLineTextBoxStyle}"
-                             Background="{DynamicResource MaterialDesign.Brush.Background.Level0}"
-                             Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
-                             Margin="0,0,8,0" />
-                    <Button Grid.Column="2"
-                            Command="{Binding BrowseTemplateDirectoryCommand}"
-                            ToolTip="フォルダーを選択"
-                            Style="{StaticResource SettingsIconButtonStyle}">
-                        <materialDesign:PackIcon Kind="FolderOpenOutline" Width="22" Height="22" />
-                    </Button>
-                </Grid>
+				<ContentControl Margin="0,16,0,0"
+				                Content="{Binding}"
+				                ContentTemplate="{StaticResource TemplateDirectorySettingsTemplate}" />
             </TabItem>
 
             <TabItem Header="送信後実行">
@@ -328,11 +432,6 @@
 
                             <CheckBox Grid.Row="0"
                                       Grid.Column="0"
-                                      Grid.ColumnSpan="2"
-                                      Content="既定で送信後実行を有効にする"
-                                      IsChecked="{Binding ExecuteDefaultEnabled, Mode=TwoWay}" />
-                            <CheckBox Grid.Row="0"
-                                      Grid.Column="2"
                                       Grid.ColumnSpan="2"
                                       Content="DOM 解析ログを出力"
                                       IsChecked="{Binding EnableDomAnalysisLog, Mode=TwoWay}" />
@@ -623,8 +722,12 @@
             </TabItem>
 
             <TabItem Header="表示状態">
-                <Grid Margin="0,16,0,0">
+				<!-- 上位タブ追加後も最小ウィンドウサイズですべての状態項目へ到達できるようにする。 -->
+				<ScrollViewer VerticalScrollBarVisibility="Auto"
+				              HorizontalScrollBarVisibility="Disabled">
+                <Grid Margin="0,16,16,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -684,18 +787,30 @@
                               SelectedItem="{Binding RightPaneSelectedTab, Mode=TwoWay}"
                               Style="{StaticResource SettingsComboBoxStyle}"
                               Margin="0,0,0,8" />
-                    <StackPanel Grid.Row="2"
-                                Grid.Column="2"
-                                Orientation="Horizontal"
-                                Margin="16,0,0,8">
-                        <CheckBox Content="IsDarkTheme"
-                                  IsThreeState="True"
-                                  IsChecked="{Binding UiStateIsDarkTheme, Mode=TwoWay}"
-                                  Margin="0,0,24,0" />
-                        <CheckBox Content="ExecuteAfterSend"
-                                  IsThreeState="True"
-                                  IsChecked="{Binding UiStateExecuteAfterSend, Mode=TwoWay}" />
-                    </StackPanel>
+                    <Grid Grid.Row="2"
+                          Grid.Column="2"
+                          Margin="16,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="240" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="テーマ"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding ThemeModeOptions}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedThemeMode, Mode=TwoWay}"
+                                  Style="{StaticResource SettingsComboBoxStyle}"
+                                  Margin="0,0,16,0" />
+                        <CheckBox Grid.Column="2"
+                                  Content="送信後実行"
+                                  IsChecked="{Binding UiStateExecuteAfterSend, Mode=TwoWay}"
+                                  VerticalAlignment="Center" />
+                    </Grid>
 
                     <TextBlock Grid.Row="3"
                                Grid.Column="0"
@@ -754,7 +869,20 @@
                               IsChecked="{Binding UiStateRestoreWindowPosition, Mode=TwoWay}"
                               Margin="0,0,0,8" />
 
-                    <DataGrid Grid.Row="6"
+                    <!-- タブ復元設定は独立して保存し、両方有効な場合は初期タブ復元を優先する。 -->
+                    <TextBlock Grid.Row="6"
+                               Grid.Column="0"
+                               Text="TabRestore"
+                               VerticalAlignment="Top"
+                               Margin="0,4,8,8" />
+                    <ContentControl Grid.Row="6"
+                                    Grid.Column="1"
+                                    Grid.ColumnSpan="2"
+                                    Margin="0,0,0,8"
+                                    Content="{Binding}"
+                                    ContentTemplate="{StaticResource TabRestoreSettingsTemplate}" />
+
+                    <DataGrid Grid.Row="7"
                               Grid.Column="0"
                               Grid.ColumnSpan="3"
                               Style="{StaticResource SettingsDataGridStyle}"
@@ -765,25 +893,34 @@
                               CanUserDeleteRows="False"
                               CanUserSortColumns="False"
                               HeadersVisibility="Column"
+							  MinHeight="160"
+							  MaxHeight="220"
                               Margin="0,12,0,0"
                               Background="{DynamicResource MaterialDesign.Brush.Background}"
                               Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="SiteName"
-                                                Width="200"
+                                                Width="160"
                                                 ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
                                                 Binding="{Binding SiteName}" />
                             <DataGridTextColumn Header="Url"
-                                                Width="*"
+                                                Width="2*"
                                                 ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
                                                 Binding="{Binding Url}" />
+                            <DataGridTextColumn Header="CurrentUrl"
+                                                Width="3*"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                Binding="{Binding CurrentUrl}" />
                             <DataGridTextColumn Header="DisplayName"
-                                                Width="220"
+                                                Width="180"
                                                 ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
                                                 Binding="{Binding DisplayName}" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
+				</ScrollViewer>
+            </TabItem>
+                </TabControl>
             </TabItem>
         </TabControl>
 

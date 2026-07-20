@@ -10,6 +10,7 @@ using AIChatHelper.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using AppThemeMode = AIChatHelper.Models.ThemeMode;
 
 namespace AIChatHelper.ViewModels;
 
@@ -54,9 +55,6 @@ public partial class SettingsWindowViewModel : ObservableObject
 	private string _templateDirectory = string.Empty;
 
 	[ObservableProperty]
-	private bool _executeDefaultEnabled;
-
-	[ObservableProperty]
 	private int _executionTimeoutMs;
 
 	[ObservableProperty]
@@ -83,11 +81,14 @@ public partial class SettingsWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private string _rightPaneSelectedTab = "History";
 
+	/// <summary>
+	/// 基本設定と詳細設定で共有するテーマモードを取得または設定します。
+	/// </summary>
 	[ObservableProperty]
-	private bool? _uiStateIsDarkTheme;
+	private AppThemeMode _selectedThemeMode = AppThemeMode.System;
 
 	[ObservableProperty]
-	private bool? _uiStateExecuteAfterSend;
+	private bool _uiStateExecuteAfterSend;
 
 	[ObservableProperty]
 	private double? _uiStateWindowWidth;
@@ -104,6 +105,13 @@ public partial class SettingsWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private bool _uiStateRestoreWindowPosition;
 
+	// タブ URL の保存と初期タブ復元は独立設定とし、実行時は初期タブ復元を優先する。
+	[ObservableProperty]
+	private bool _saveAndRestoreTabUrls;
+
+	[ObservableProperty]
+	private bool _alwaysRestoreInitialTabs;
+
 	public ObservableCollection<ChatSiteSettingsItem> ChatSites { get; } = new();
 	public ObservableCollection<EditableStringItem> InputSelectors { get; } = new();
 	public ObservableCollection<ServiceExecutorSettingsItem> ServiceExecutors { get; } = new();
@@ -113,6 +121,16 @@ public partial class SettingsWindowViewModel : ObservableObject
 	public IReadOnlyList<string> KeyboardFallbackOptions { get; } = new[] { "None", "Enter", "CtrlEnter" };
 	public IReadOnlyList<string> PaneDisplayModeOptions { get; } = new[] { "TwoPane", "LeftPane", "RightPane" };
 	public IReadOnlyList<string> RightPaneSelectedTabOptions { get; } = new[] { "History", "Template" };
+
+	/// <summary>
+	/// 設定画面で選択できるテーマモードを表示順で取得します。
+	/// </summary>
+	public IReadOnlyList<ThemeModeOption> ThemeModeOptions { get; } = new[]
+	{
+		new ThemeModeOption(AppThemeMode.System, "Windows の設定に合わせる"),
+		new ThemeModeOption(AppThemeMode.Light, "ライト"),
+		new ThemeModeOption(AppThemeMode.Dark, "ダーク")
+	};
 
 	public SettingsWindowViewModel(ISettingsService settingsService)
 	{
@@ -133,7 +151,8 @@ public partial class SettingsWindowViewModel : ObservableObject
 		}
 		catch (Exception ex)
 		{
-			StatusMessage = $"保存できません: {ex.Message}";
+			// CurrentUrl を例外本文経由で画面へ露出させない。
+			StatusMessage = $"保存できません。settings.toml の内容と書き込み権限を確認してください。({ex.GetType().Name})";
 		}
 	}
 
@@ -368,7 +387,7 @@ public partial class SettingsWindowViewModel : ObservableObject
 		}
 		catch (Exception ex)
 		{
-			StatusMessage = $"settings.toml を読み込めません: {ex.Message}";
+			StatusMessage = $"settings.toml を読み込めません。ファイルの内容を確認してください。({ex.GetType().Name})";
 		}
 	}
 
@@ -401,7 +420,6 @@ public partial class SettingsWindowViewModel : ObservableObject
 		TemplateDirectory = config.Config.TemplateSettings.TemplateDirectory ?? string.Empty;
 
 		var executeSettings = config.Config.ExecuteAfterSendSettings;
-		ExecuteDefaultEnabled = executeSettings.DefaultEnabled;
 		ExecutionTimeoutMs = executeSettings.ExecutionTimeoutMs;
 		PostInputDelayMs = executeSettings.PostInputDelayMs;
 		RetryIntervalMs = executeSettings.RetryIntervalMs;
@@ -433,12 +451,16 @@ public partial class SettingsWindowViewModel : ObservableObject
 		}
 		SelectedServiceExecutor = ServiceExecutors.FirstOrDefault();
 
+		var tabRestoreSettings = config.Config.TabRestoreSettings;
+		SaveAndRestoreTabUrls = tabRestoreSettings.SaveAndRestoreTabUrls;
+		AlwaysRestoreInitialTabs = tabRestoreSettings.AlwaysRestoreInitialTabs;
+
 		var uiState = config.Config.UiState;
 		ActiveLeftTabIndex = uiState.ActiveLeftTabIndex;
 		PaneDisplayMode = uiState.PaneDisplayMode;
 		RightPaneSelectedTab = uiState.RightPaneSelectedTab;
-		UiStateIsDarkTheme = uiState.IsDarkTheme;
-		UiStateExecuteAfterSend = uiState.ExecuteAfterSend;
+		SelectedThemeMode = uiState.IsDarkTheme.ToThemeMode();
+		UiStateExecuteAfterSend = uiState.ExecuteAfterSend ?? false;
 		UiStateWindowWidth = uiState.WindowWidth;
 		UiStateWindowHeight = uiState.WindowHeight;
 		UiStateWindowLeft = uiState.WindowLeft;
@@ -452,7 +474,8 @@ public partial class SettingsWindowViewModel : ObservableObject
 			{
 				SiteName = tab.SiteName,
 				Url = tab.Url,
-				DisplayName = tab.DisplayName
+				DisplayName = tab.DisplayName,
+				CurrentUrl = tab.CurrentUrl
 			});
 		}
 	}
@@ -484,9 +507,13 @@ public partial class SettingsWindowViewModel : ObservableObject
 				{
 					TemplateDirectory = TemplateDirectory ?? string.Empty
 				},
+				TabRestoreSettings = new TabRestoreSettings
+				{
+					SaveAndRestoreTabUrls = SaveAndRestoreTabUrls,
+					AlwaysRestoreInitialTabs = AlwaysRestoreInitialTabs
+				},
 				ExecuteAfterSendSettings = new ExecuteAfterSendSettings
 				{
-					DefaultEnabled = ExecuteDefaultEnabled,
 					ExecutionTimeoutMs = ExecutionTimeoutMs,
 					PostInputDelayMs = PostInputDelayMs,
 					RetryIntervalMs = RetryIntervalMs,
@@ -507,7 +534,7 @@ public partial class SettingsWindowViewModel : ObservableObject
 					ActiveLeftTabIndex = ActiveLeftTabIndex,
 					PaneDisplayMode = PaneDisplayMode,
 					RightPaneSelectedTab = RightPaneSelectedTab,
-					IsDarkTheme = UiStateIsDarkTheme,
+					IsDarkTheme = SelectedThemeMode.ToNullableBoolean(),
 					ExecuteAfterSend = UiStateExecuteAfterSend,
 					WindowWidth = UiStateWindowWidth,
 					WindowHeight = UiStateWindowHeight,
@@ -519,7 +546,10 @@ public partial class SettingsWindowViewModel : ObservableObject
 						{
 							SiteName = item.SiteName ?? string.Empty,
 							Url = item.Url ?? string.Empty,
-							DisplayName = item.DisplayName ?? string.Empty
+							DisplayName = item.DisplayName ?? string.Empty,
+							CurrentUrl = SaveAndRestoreTabUrls && !AlwaysRestoreInitialTabs
+								? item.CurrentUrl ?? string.Empty
+								: string.Empty
 						})
 						.ToList()
 				}
@@ -631,4 +661,7 @@ public partial class LeftPaneTabStateItem : ObservableObject
 
 	[ObservableProperty]
 	private string _displayName = string.Empty;
+
+	[ObservableProperty]
+	private string _currentUrl = string.Empty;
 }
