@@ -1,6 +1,6 @@
 [[ChatSites]]
 Name = "ChatGPT"
-Url = "https://chat.openai.com/"
+Url = "https://chatgpt.com/"
 
 [[ChatSites]]
 Name = "Gemini"
@@ -34,6 +34,12 @@ TemplateTextForEditor = """
 [Config.TemplateSettings]
 # 相対パスの場合は実行フォルダー基準。絶対パス、ドライブパス、UNC パスも指定可能。
 TemplateDirectory = "template"
+
+[Config.TabRestoreSettings]
+# true: 登録 URL と同じドメイン内で最後に表示していたページを保存・復元する
+SaveAndRestoreTabUrls = false
+# true: 保存済みタブより優先して、ChatSites を登録順に各 1 タブずつ初期 URL で開く
+AlwaysRestoreInitialTabs = false
 
 [Config.ExecuteAfterSendSettings]
 # 送信後実行チェックボックスの初期状態

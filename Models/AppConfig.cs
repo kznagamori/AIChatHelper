@@ -20,6 +20,8 @@ public class Config
 	public EditorSettings EditorSettings { get; set; } = new EditorSettings();
 	// テンプレート表示に関する設定
 	public TemplateSettings TemplateSettings { get; set; } = new TemplateSettings();
+	// 左ペインのチャットタブ復元に関する設定
+	public TabRestoreSettings TabRestoreSettings { get; set; } = new TabRestoreSettings();
 	// チャット入力後に実行する処理の設定
 	public ExecuteAfterSendSettings ExecuteAfterSendSettings { get; set; } = new ExecuteAfterSendSettings();
 	// アプリの表示状態に関する設定
@@ -30,6 +32,22 @@ public class TemplateSettings
 {
 	// テンプレートツリーで参照するディレクトリ
 	public string TemplateDirectory { get; set; } = "template";
+}
+
+/// <summary>
+/// 左ペインのチャットタブを次回起動時に復元する方法を表します。
+/// </summary>
+public class TabRestoreSettings
+{
+	/// <summary>
+	/// 登録サイトの許可範囲内にあるタブ URL を保存して復元するかどうかを取得または設定します。
+	/// </summary>
+	public bool SaveAndRestoreTabUrls { get; set; } = false;
+
+	/// <summary>
+	/// 保存済みタブを使わず、登録済みチャットサイトから初期タブを作成するかどうかを取得または設定します。
+	/// </summary>
+	public bool AlwaysRestoreInitialTabs { get; set; } = false;
 }
 
 public class ExecuteAfterSendSettings
@@ -69,9 +87,25 @@ public class UiStateSettings
 [TomlDoNotInlineObjectAttribute]
 public class LeftPaneTabState
 {
+	/// <summary>
+	/// タブの登録元となったチャットサイト名を取得または設定します。
+	/// </summary>
 	public string SiteName { get; set; } = string.Empty;
+
+	/// <summary>
+	/// 登録元のチャットサイト URL を取得または設定します。
+	/// </summary>
 	public string Url { get; set; } = string.Empty;
+
+	/// <summary>
+	/// タブ見出しに表示する名前を取得または設定します。
+	/// </summary>
 	public string DisplayName { get; set; } = string.Empty;
+
+	/// <summary>
+	/// WebView2 が最後に表示していた、検証済みの URL を取得または設定します。
+	/// </summary>
+	public string CurrentUrl { get; set; } = string.Empty;
 }
 
 // エディタ設定クラスを新規作成

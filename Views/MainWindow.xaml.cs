@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AIChatHelper.Core.Controls;
+using AIChatHelper.Core.Helper;
 using AIChatHelper.Models;
 using MaterialDesignThemes.Wpf;
 using Microsoft.Win32;
@@ -42,6 +43,7 @@ public partial class MainWindow : Window
 	private readonly Dictionary<string, int> _tabNameCounts = new(StringComparer.OrdinalIgnoreCase);
 	private readonly List<ChatTabViewState> _chatTabStates = new();
 	private readonly Dictionary<TabItem, ChatTabViewState> _chatTabStatesByItem = new();
+	private readonly Dictionary<CoreWebView2, ChatTabViewState> _chatTabStatesByCoreWebView = new();
 	private readonly DispatcherTimer _uiStateSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
 	private Grid? _mainGrid;
 	private AvalonTextEditor? _avalonEditor;
@@ -52,6 +54,8 @@ public partial class MainWindow : Window
 	private bool _suppressUiStateSave = true;
 	private bool _isSettingsWindowOpen;
 	private bool _restoreWindowPosition;
+	private bool _saveAndRestoreTabUrls;
+	private bool _alwaysRestoreInitialTabs;
 
 	public object? ActiveChatCommandTarget
 	{
@@ -61,18 +65,33 @@ public partial class MainWindow : Window
 
 	private sealed class ChatTabViewState
 	{
-		public ChatTabViewState(ChatSite site, string displayName, TabItem tabItem, Grid contentElement)
+		public ChatTabViewState(
+			ChatSite site,
+			string displayName,
+			TabItem tabItem,
+			Grid contentElement,
+			WebView2 webView,
+			string currentUrl)
 		{
 			Site = site;
 			DisplayName = displayName;
 			TabItem = tabItem;
 			ContentElement = contentElement;
+			WebView = webView;
+			CurrentUrl = currentUrl;
 		}
 
 		public ChatSite Site { get; }
 		public string DisplayName { get; }
 		public TabItem TabItem { get; }
 		public Grid ContentElement { get; }
+		public WebView2 WebView { get; }
+		public string CurrentUrl { get; set; }
+
+		/// <summary>
+		/// 初期表示前の一時的な about:blank 以外を通知済みかどうかを取得または設定します。
+		/// </summary>
+		public bool HasObservedNonTransientSource { get; set; }
 		public Border? SplitPaneBorder { get; set; }
 		public ContentControl? SplitContentHost { get; set; }
 		public Button? SplitCloseButton { get; set; }
@@ -102,6 +121,8 @@ public partial class MainWindow : Window
 
 		var config = settingsService.Load();
 		_restoreWindowPosition = config.Config.UiState?.RestoreWindowPosition ?? false;
+		_saveAndRestoreTabUrls = config.Config.TabRestoreSettings.SaveAndRestoreTabUrls;
+		_alwaysRestoreInitialTabs = config.Config.TabRestoreSettings.AlwaysRestoreInitialTabs;
 		RestoreWindowPlacement(config.Config.UiState);
 
 		// 起動時のみOSのテーマを検出して、WebView2初期化前にViewModelへ反映
@@ -157,22 +178,49 @@ public partial class MainWindow : Window
 		ApplyLeftPaneDisplayMode();
 	}
 
-	private void CreateChatTab(ChatSite site, bool selectTab, string? displayNameOverride = null)
+	/// <summary>
+	/// 登録サイトからチャットタブを作成し、必要に応じて検証済みの保存 URL から表示を開始します。
+	/// </summary>
+	/// <param name="site">タブの登録元となるチャットサイト。</param>
+	/// <param name="selectTab">作成したタブを選択する場合は <see langword="true"/>。</param>
+	/// <param name="displayNameOverride">復元するタブ表示名。</param>
+	/// <param name="restoredUrl">前回表示していた復元候補 URL。</param>
+	/// <returns>作成したタブ状態。作成できない場合は <see langword="null"/>。</returns>
+	private ChatTabViewState? CreateChatTab(
+		ChatSite site,
+		bool selectTab,
+		string? displayNameOverride = null,
+		string? restoredUrl = null)
 	{
-		if (!TryCreateSiteUri(site, out var uri))
+		if (!TryCreateSiteUri(site, out var registeredUri))
 		{
 			MessageBox.Show(
 				"選択したチャットサイトのURLが不正です。",
 				"タブ追加エラー",
 				MessageBoxButton.OK,
 				MessageBoxImage.Warning);
-			return;
+			return null;
 		}
 
-		var browser = new WebView2
+		var launchUri = registeredUri;
+		if (_saveAndRestoreTabUrls &&
+			!_alwaysRestoreInitialTabs &&
+			ChatTabUrlPolicy.TryGetRestorableUri(site, restoredUrl, out var validatedRestoredUri))
 		{
-			Source = uri
-		};
+			launchUri = validatedRestoredUri;
+		}
+
+		WebView2 browser;
+		try
+		{
+			browser = new WebView2();
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"WebView2生成エラー: {ex.GetType().Name}");
+			ShowChatTabCreationError();
+			return null;
+		}
 
 		browser.PreviewKeyDown += WebView_PreviewKeyDown;
 		browser.GotFocus += WebView_GotFocus;
@@ -191,11 +239,30 @@ public partial class MainWindow : Window
 		};
 		item.Header = CreateTabHeader(item, displayName);
 
-		var tabState = new ChatTabViewState(site, displayName, item, grid);
+		var tabState = new ChatTabViewState(
+			site,
+			displayName,
+			item,
+			grid,
+			browser,
+			launchUri.AbsoluteUri);
 		_chatTabStates.Add(tabState);
 		_chatTabStatesByItem[item] = tabState;
 
 		TabControlMain.Items.Add(item);
+		try
+		{
+			// TabState を登録してから遷移を開始し、初期化完了イベントで確実に対応付けられるようにする。
+			browser.Source = launchUri;
+		}
+		catch (Exception ex)
+		{
+			Debug.WriteLine($"WebView2初期URL設定エラー: {ex.GetType().Name}");
+			DisposeChatTab(item);
+			TabControlMain.Items.Remove(item);
+			ShowChatTabCreationError();
+			return null;
+		}
 		if (_activeChatTabState == null || selectTab)
 		{
 			SetActiveChatTab(tabState);
@@ -207,42 +274,87 @@ public partial class MainWindow : Window
 		}
 
 		RequestDebouncedUiStateSave();
+		return tabState;
 	}
 
+	private static void ShowChatTabCreationError()
+	{
+		MessageBox.Show(
+			"WebView2 のチャットタブを作成できませんでした。",
+			"タブ追加エラー",
+			MessageBoxButton.OK,
+			MessageBoxImage.Error);
+	}
+
+	/// <summary>
+	/// 保存設定の優先順位に従って、起動時の左ペインチャットタブを復元します。
+	/// </summary>
 	private void RestoreLeftPaneTabs(UiStateSettings? uiState, IReadOnlyList<ChatSite> chatSites)
 	{
-		var restoredAny = false;
+		if (_alwaysRestoreInitialTabs)
+		{
+			SelectFirstChatTabOrClear(CreateInitialChatTabs(chatSites));
+			return;
+		}
+
+		var restoredTabCount = 0;
 		if (uiState?.LeftPaneTabs is { Count: > 0 } savedTabs)
 		{
 			foreach (var savedTab in savedTabs)
 			{
-				var site = FindMatchingChatSite(savedTab, chatSites);
+				var site = ChatTabUrlPolicy.FindMatchingSite(savedTab, chatSites);
 				if (site == null)
 				{
 					continue;
 				}
 
-				CreateChatTab(site, selectTab: false, savedTab.DisplayName);
-				restoredAny = true;
+				if (CreateChatTab(
+						site,
+						selectTab: false,
+						displayNameOverride: savedTab.DisplayName,
+						restoredUrl: savedTab.CurrentUrl) != null)
+				{
+					restoredTabCount++;
+				}
 			}
 		}
 
-		if (!restoredAny)
+		if (restoredTabCount == 0)
 		{
-			foreach (var site in chatSites)
-			{
-				CreateChatTab(site, selectTab: false);
-			}
-		}
-
-		if (_chatTabStates.Count == 0)
-		{
-			SetActiveChatTab(null);
+			SelectFirstChatTabOrClear(CreateInitialChatTabs(chatSites));
 			return;
 		}
 
 		var activeIndex = Math.Clamp(uiState?.ActiveLeftTabIndex ?? 0, 0, _chatTabStates.Count - 1);
 		SetActiveChatTab(_chatTabStates[activeIndex]);
+	}
+
+	/// <summary>
+	/// 登録順に各チャットサイトの初期タブを作成します。
+	/// </summary>
+	/// <param name="chatSites">初期タブとして開くチャットサイト。</param>
+	/// <returns>作成に成功したタブ数。</returns>
+	private int CreateInitialChatTabs(IReadOnlyList<ChatSite> chatSites)
+	{
+		var createdCount = 0;
+		foreach (var site in chatSites)
+		{
+			if (CreateChatTab(site, selectTab: false) != null)
+			{
+				createdCount++;
+			}
+		}
+
+		return createdCount;
+	}
+
+	/// <summary>
+	/// 初期タブの作成結果に応じて、先頭タブまたは選択なしを設定します。
+	/// </summary>
+	/// <param name="createdCount">作成に成功した初期タブ数。</param>
+	private void SelectFirstChatTabOrClear(int createdCount)
+	{
+		SetActiveChatTab(createdCount > 0 ? _chatTabStates.FirstOrDefault() : null);
 	}
 
 	private void RestoreWindowPlacement(UiStateSettings? uiState)
@@ -293,25 +405,7 @@ public partial class MainWindow : Window
 		return screenBounds.IntersectsWith(windowBounds);
 	}
 
-	private static ChatSite? FindMatchingChatSite(LeftPaneTabState savedTab, IReadOnlyList<ChatSite> chatSites)
-	{
-		return chatSites.FirstOrDefault(site =>
-				string.Equals(site.Name, savedTab.SiteName, StringComparison.OrdinalIgnoreCase) &&
-				AreSameUrl(site.Url, savedTab.Url))
-			?? chatSites.FirstOrDefault(site => AreSameUrl(site.Url, savedTab.Url));
-	}
-
-	private static bool AreSameUrl(string? left, string? right)
-	{
-		return string.Equals(NormalizeUrlForState(left), NormalizeUrlForState(right), StringComparison.OrdinalIgnoreCase);
-	}
-
-	private static string NormalizeUrlForState(string? value)
-	{
-		return (value ?? string.Empty).Trim().TrimEnd('/');
-	}
-
-	private bool TryCreateSiteUri(ChatSite site, out Uri uri)
+	private static bool TryCreateSiteUri(ChatSite site, out Uri uri)
 	{
 		uri = null!;
 		return !string.IsNullOrWhiteSpace(site.Url)
@@ -530,6 +624,12 @@ public partial class MainWindow : Window
 
 	private void DetachAndDisposeWebView(Grid ownerGrid, WebView2 webView)
 	{
+		if (webView.CoreWebView2 is { } coreWebView)
+		{
+			coreWebView.SourceChanged -= CoreWebView2_SourceChanged;
+			_chatTabStatesByCoreWebView.Remove(coreWebView);
+		}
+
 		webView.PreviewKeyDown -= WebView_PreviewKeyDown;
 		webView.GotFocus -= WebView_GotFocus;
 		webView.CoreWebView2InitializationCompleted -= WebView_CoreWebView2InitializationCompleted;
@@ -540,7 +640,7 @@ public partial class MainWindow : Window
 		}
 		catch (Exception ex)
 		{
-			Debug.WriteLine($"WebView2破棄エラー: {ex.Message}");
+			Debug.WriteLine($"WebView2破棄エラー: {ex.GetType().Name}");
 		}
 	}
 
@@ -553,7 +653,7 @@ public partial class MainWindow : Window
 
 		if (!e.IsSuccess)
 		{
-			Debug.WriteLine($"WebView2初期化エラー: {e.InitializationException?.Message}");
+			Debug.WriteLine($"WebView2初期化エラー: {e.InitializationException?.GetType().Name ?? "Unknown"}");
 			MessageBox.Show(
 				"WebView2の初期化に失敗したため、タブを閉じます。",
 				"タブ追加エラー",
@@ -573,6 +673,15 @@ public partial class MainWindow : Window
 			return;
 		}
 
+		var tabState = FindTabStateForWebView(webView);
+		if (tabState != null)
+		{
+			// 名前付きハンドラーを使い、タブ破棄時に確実に解除できるようにする。
+			webView.CoreWebView2.SourceChanged -= CoreWebView2_SourceChanged;
+			_chatTabStatesByCoreWebView[webView.CoreWebView2] = tabState;
+			webView.CoreWebView2.SourceChanged += CoreWebView2_SourceChanged;
+		}
+
 		try
 		{
 			var isDarkTheme = DataContext is ViewModels.MainWindowViewModel viewModel && viewModel.IsDarkTheme;
@@ -583,14 +692,42 @@ public partial class MainWindow : Window
 		}
 		catch (Exception ex)
 		{
-			Debug.WriteLine($"WebView2テーマ設定エラー: {ex.Message}");
+			Debug.WriteLine($"WebView2テーマ設定エラー: {ex.GetType().Name}");
+		}
+	}
+
+	/// <summary>
+	/// WebView2 の表示 URL を追跡し、URL 復元が有効な場合だけ UI 状態保存を予約します。
+	/// </summary>
+	/// <param name="sender">URL が変化した CoreWebView2。</param>
+	/// <param name="e">URL 変更イベント情報。</param>
+	private void CoreWebView2_SourceChanged(object? sender, CoreWebView2SourceChangedEventArgs e)
+	{
+		if (sender is not CoreWebView2 coreWebView ||
+			!_chatTabStatesByCoreWebView.TryGetValue(coreWebView, out var tabState))
+		{
+			return;
+		}
+
+		var currentUrl = coreWebView.Source;
+		if (!tabState.HasObservedNonTransientSource && IsTransientInitialWebViewSource(currentUrl))
+		{
+			// 初期ナビゲーション前の about:blank では、作成時に保持した起動 URL を上書きしない。
+			return;
+		}
+
+		tabState.HasObservedNonTransientSource = true;
+		tabState.CurrentUrl = currentUrl;
+		if (_saveAndRestoreTabUrls && !_alwaysRestoreInitialTabs)
+		{
+			RequestDebouncedUiStateSave();
 		}
 	}
 
 	private TabItem? FindTabItemForWebView(WebView2 webView)
 	{
 		return _chatTabStates
-			.FirstOrDefault(state => state.ContentElement.Children.Contains(webView))
+			.FirstOrDefault(state => ReferenceEquals(state.WebView, webView))
 			?.TabItem;
 	}
 
@@ -623,7 +760,7 @@ public partial class MainWindow : Window
 
 	private ChatTabViewState? FindTabStateForWebView(WebView2 webView)
 	{
-		return _chatTabStates.FirstOrDefault(state => state.ContentElement.Children.Contains(webView));
+		return _chatTabStates.FirstOrDefault(state => ReferenceEquals(state.WebView, webView));
 	}
 
 	private void SetActiveChatTab(ChatTabViewState? tabState, bool updateSelection = true)
@@ -850,6 +987,7 @@ public partial class MainWindow : Window
 		{
 			closeButton.Style = closeButtonStyle;
 		}
+		closeButton.PreviewMouseLeftButtonDown += SplitPaneCloseButton_PreviewMouseLeftButtonDown;
 		closeButton.Click += SplitPaneCloseButton_Click;
 		Grid.SetColumn(closeButton, 1);
 
@@ -896,6 +1034,18 @@ public partial class MainWindow : Window
 	}
 
 	/// <summary>
+	/// 閉じる操作が親ペインへ伝播して、非アクティブなタブを選択してしまうことを防ぎます。
+	/// </summary>
+	private void SplitPaneCloseButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		e.Handled = true;
+		if (sender is Button { Tag: ChatTabViewState tabState })
+		{
+			CloseChatTab(tabState.TabItem);
+		}
+	}
+
+	/// <summary>
 	/// 分割ペインと行・列定義を解除し、次の表示モードへ移行できる状態にします。
 	/// </summary>
 	private void ClearSplitPanes()
@@ -914,6 +1064,7 @@ public partial class MainWindow : Window
 	{
 		if (tabState.SplitCloseButton != null)
 		{
+			tabState.SplitCloseButton.PreviewMouseLeftButtonDown -= SplitPaneCloseButton_PreviewMouseLeftButtonDown;
 			tabState.SplitCloseButton.Click -= SplitPaneCloseButton_Click;
 			tabState.SplitCloseButton.Tag = null;
 		}
@@ -1130,11 +1281,12 @@ public partial class MainWindow : Window
 		}
 		catch (Exception ex)
 		{
-			Debug.WriteLine($"UI状態の保存に失敗しました: {ex}");
+			// CurrentUrl を例外本文経由でログや画面へ露出させない。
+			Debug.WriteLine($"UI状態の保存に失敗しました: {ex.GetType().Name}");
 			if (showErrorMessage)
 			{
 				MessageBox.Show(
-					$"現在の状態を settings.toml に保存できませんでした。\n{ex.Message}",
+					"現在の状態を settings.toml に保存できませんでした。",
 					"設定保存エラー",
 					MessageBoxButton.OK,
 					MessageBoxImage.Warning);
@@ -1166,9 +1318,59 @@ public partial class MainWindow : Window
 			{
 				SiteName = tabState.Site.Name,
 				Url = tabState.Site.Url,
-				DisplayName = tabState.DisplayName
+				DisplayName = tabState.DisplayName,
+				CurrentUrl = GetPersistableCurrentUrl(tabState)
 			}).ToList()
 		};
+	}
+
+	/// <summary>
+	/// タブの最新 URL を共通ポリシーで検証し、保存可能な場合だけ返します。
+	/// </summary>
+	/// <param name="tabState">保存対象のチャットタブ状態。</param>
+	/// <returns>保存可能な絶対 URL。保存しない場合は空文字列。</returns>
+	private string GetPersistableCurrentUrl(ChatTabViewState tabState)
+	{
+		if (!_saveAndRestoreTabUrls || _alwaysRestoreInitialTabs)
+		{
+			return string.Empty;
+		}
+
+		string? liveUrl = null;
+		try
+		{
+			if (tabState.WebView.CoreWebView2 is { } coreWebView)
+			{
+				liveUrl = coreWebView.Source;
+			}
+		}
+		catch (Exception ex)
+		{
+			// WebView2 の終了処理と競合した場合は、最後に通知された URL で検証を続ける。
+			Debug.WriteLine($"WebView2 URL 取得エラー: {ex.GetType().Name}");
+		}
+
+		if (ChatTabUrlPolicy.TryGetRestorableUri(tabState.Site, liveUrl, out var liveUri))
+		{
+			return liveUri.AbsoluteUri;
+		}
+
+		// 初期 URL が WebView2.Source に反映される前だけ、タブ作成時の検証済み URL を使用する。
+		if (liveUrl != null &&
+			(tabState.HasObservedNonTransientSource || !IsTransientInitialWebViewSource(liveUrl)))
+		{
+			return string.Empty;
+		}
+
+		return ChatTabUrlPolicy.TryGetRestorableUri(tabState.Site, tabState.CurrentUrl, out var currentUri)
+			? currentUri.AbsoluteUri
+			: string.Empty;
+	}
+
+	private static bool IsTransientInitialWebViewSource(string? source)
+	{
+		return string.IsNullOrWhiteSpace(source) ||
+			string.Equals(source.Trim(), "about:blank", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private Rect GetRestorableWindowBounds()
@@ -1242,13 +1444,17 @@ public partial class MainWindow : Window
 
 		try
 		{
-			var uiState = _settingsService.Load().Config.UiState;
+			var config = _settingsService.Load();
+			var uiState = config.Config.UiState;
+			var tabRestoreSettings = config.Config.TabRestoreSettings;
 			_restoreWindowPosition = uiState.RestoreWindowPosition;
+			_saveAndRestoreTabUrls = tabRestoreSettings.SaveAndRestoreTabUrls;
+			_alwaysRestoreInitialTabs = tabRestoreSettings.AlwaysRestoreInitialTabs;
 			_mainViewModel?.ApplyPaneDisplayMode(uiState.PaneDisplayMode);
 		}
 		catch (Exception ex)
 		{
-			Debug.WriteLine($"UI状態設定の再読み込みに失敗しました: {ex.Message}");
+			Debug.WriteLine($"UI状態設定の再読み込みに失敗しました: {ex.GetType().Name}");
 		}
 	}
 
@@ -1418,6 +1624,7 @@ public partial class MainWindow : Window
 		{
 			DisposeChatTab(tabState.TabItem);
 		}
+		_chatTabStatesByCoreWebView.Clear();
 		ClearSplitPanes();
 		TabControlMain.Items.Clear();
 		TabControlMain.PreviewKeyDown -= TabControlMain_PreviewKeyDown;

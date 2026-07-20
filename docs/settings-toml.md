@@ -12,6 +12,7 @@
 - `[Config]`
 - `[Config.EditorSettings]`
 - `[Config.TemplateSettings]`
+- `[Config.TabRestoreSettings]`
 - `[Config.ExecuteAfterSendSettings]`
 - `[[Config.ExecuteAfterSendSettings.ServiceExecutors]]`
 - `[Config.UiState]`
@@ -127,6 +128,34 @@ TemplateDirectory = "\\\\server\\share\\template"
 
 ネットワークドライブや UNC パスを指定した場合、Windows の認証ダイアログが表示されることがあります。
 
+## Config.TabRestoreSettings
+
+左ペインのチャットタブを次回起動時に復元する方法を設定します。
+
+```toml
+[Config.TabRestoreSettings]
+SaveAndRestoreTabUrls = false
+AlwaysRestoreInitialTabs = false
+```
+
+項目:
+
+- `SaveAndRestoreTabUrls`: 登録チャットサイト内で最後に表示していたページ URL を保存し、次回起動時に復元するか。
+- `AlwaysRestoreInitialTabs`: 前回のタブ構成を使わず、`[[ChatSites]]` を登録順に各 1 タブずつ登録 URL で開くか。
+
+両方が `true` の場合は `AlwaysRestoreInitialTabs` が優先されます。`[[ChatSites]]` の先頭タブが選択され、現在 URL は保存・復元されません。両方が `false` の場合は、前回のタブ構成を復元し、各タブを登録 URL から開く従来の動作になります。
+
+現在 URL の保存・復元には次の制限があります。
+
+- 登録 URL と同じ `http` / `https` スキームであること。
+- 登録 URL と同じホスト、またはその DNS サブドメインであること。
+- ユーザー情報を含まず、8,192 文字以内であること。
+- 外部リンクや別ドメインの認証ページは保存しないこと。
+
+例えば、登録 URL が `https://chat.openai.com/` の場合、別ドメインである `https://chatgpt.com/` のページ URL は保存対象外です。`chatgpt.com` 内のページを復元する場合は、`[[ChatSites]]` の URL 自体を `https://chatgpt.com/` に変更してください。
+
+URL のパスやクエリには会話 ID などが含まれる場合があります。`SaveAndRestoreTabUrls = true` にすると、対象 URL は `settings.toml` の `CurrentUrl` に平文で保存されます。また、機能を無効にした直後の最初の保存では、直前の内容を保持する `settings.toml.bak` に URL が残る場合があります。その後の設定保存でバックアップも上書きされます。
+
 ## Config.ExecuteAfterSendSettings
 
 右ペインの「送信後実行」機能を設定します。
@@ -232,6 +261,7 @@ ExecuteAfterSend = false
 SiteName = "ChatGPT"
 Url = "https://chat.openai.com/"
 DisplayName = "ChatGPT"
+CurrentUrl = "https://chat.openai.com/c/example"
 ```
 
 項目:
@@ -239,8 +269,9 @@ DisplayName = "ChatGPT"
 - `SiteName`: 元になったチャットサイト名。
 - `Url`: 元になったチャットサイト URL。
 - `DisplayName`: タブ見出し。
+- `CurrentUrl`: 最後に表示していた検証済み URL。URL 保存・復元が有効な場合だけ出力されます。
 
-復元時は、現在の `[[ChatSites]]` に一致するタブだけが作成されます。保存済み URL が現在の `ChatSites` に存在しない場合、そのタブはスキップされます。
+復元時は、現在の `[[ChatSites]]` に一致するタブだけが作成されます。保存済み登録 URL が現在の `ChatSites` に存在しない場合、そのタブはスキップされます。`CurrentUrl` が不正または許可ドメイン外の場合は、元の `Url` から開きます。
 
 ## 例
 
@@ -274,6 +305,10 @@ TemplateTextForEditor = """
 
 [Config.TemplateSettings]
 TemplateDirectory = "template"
+
+[Config.TabRestoreSettings]
+SaveAndRestoreTabUrls = false
+AlwaysRestoreInitialTabs = false
 
 [Config.ExecuteAfterSendSettings]
 DefaultEnabled = false
@@ -312,3 +347,7 @@ TOML の構文が壊れている可能性があります。文字列の閉じ忘
 ### テンプレートが表示されない
 
 `TemplateDirectory` のパスが存在するか確認してください。ネットワークパスの場合は Windows 側で接続・認証できる必要があります。
+
+### 前回開いていたチャットページが復元されない
+
+`SaveAndRestoreTabUrls = true` になっていることと、`AlwaysRestoreInitialTabs = false` になっていることを確認してください。現在ページが登録 URL と別のドメイン、別のスキーム、または 8,192 文字を超える URL の場合は保存されず、登録 URL から開きます。

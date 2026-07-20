@@ -104,6 +104,13 @@ public partial class SettingsWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private bool _uiStateRestoreWindowPosition;
 
+	// タブ URL の保存と初期タブ復元は独立設定とし、実行時は初期タブ復元を優先する。
+	[ObservableProperty]
+	private bool _saveAndRestoreTabUrls;
+
+	[ObservableProperty]
+	private bool _alwaysRestoreInitialTabs;
+
 	public ObservableCollection<ChatSiteSettingsItem> ChatSites { get; } = new();
 	public ObservableCollection<EditableStringItem> InputSelectors { get; } = new();
 	public ObservableCollection<ServiceExecutorSettingsItem> ServiceExecutors { get; } = new();
@@ -133,7 +140,8 @@ public partial class SettingsWindowViewModel : ObservableObject
 		}
 		catch (Exception ex)
 		{
-			StatusMessage = $"保存できません: {ex.Message}";
+			// CurrentUrl を例外本文経由で画面へ露出させない。
+			StatusMessage = $"保存できません。settings.toml の内容と書き込み権限を確認してください。({ex.GetType().Name})";
 		}
 	}
 
@@ -368,7 +376,7 @@ public partial class SettingsWindowViewModel : ObservableObject
 		}
 		catch (Exception ex)
 		{
-			StatusMessage = $"settings.toml を読み込めません: {ex.Message}";
+			StatusMessage = $"settings.toml を読み込めません。ファイルの内容を確認してください。({ex.GetType().Name})";
 		}
 	}
 
@@ -433,6 +441,10 @@ public partial class SettingsWindowViewModel : ObservableObject
 		}
 		SelectedServiceExecutor = ServiceExecutors.FirstOrDefault();
 
+		var tabRestoreSettings = config.Config.TabRestoreSettings;
+		SaveAndRestoreTabUrls = tabRestoreSettings.SaveAndRestoreTabUrls;
+		AlwaysRestoreInitialTabs = tabRestoreSettings.AlwaysRestoreInitialTabs;
+
 		var uiState = config.Config.UiState;
 		ActiveLeftTabIndex = uiState.ActiveLeftTabIndex;
 		PaneDisplayMode = uiState.PaneDisplayMode;
@@ -452,7 +464,8 @@ public partial class SettingsWindowViewModel : ObservableObject
 			{
 				SiteName = tab.SiteName,
 				Url = tab.Url,
-				DisplayName = tab.DisplayName
+				DisplayName = tab.DisplayName,
+				CurrentUrl = tab.CurrentUrl
 			});
 		}
 	}
@@ -483,6 +496,11 @@ public partial class SettingsWindowViewModel : ObservableObject
 				TemplateSettings = new TemplateSettings
 				{
 					TemplateDirectory = TemplateDirectory ?? string.Empty
+				},
+				TabRestoreSettings = new TabRestoreSettings
+				{
+					SaveAndRestoreTabUrls = SaveAndRestoreTabUrls,
+					AlwaysRestoreInitialTabs = AlwaysRestoreInitialTabs
 				},
 				ExecuteAfterSendSettings = new ExecuteAfterSendSettings
 				{
@@ -519,7 +537,10 @@ public partial class SettingsWindowViewModel : ObservableObject
 						{
 							SiteName = item.SiteName ?? string.Empty,
 							Url = item.Url ?? string.Empty,
-							DisplayName = item.DisplayName ?? string.Empty
+							DisplayName = item.DisplayName ?? string.Empty,
+							CurrentUrl = SaveAndRestoreTabUrls && !AlwaysRestoreInitialTabs
+								? item.CurrentUrl ?? string.Empty
+								: string.Empty
 						})
 						.ToList()
 				}
@@ -631,4 +652,7 @@ public partial class LeftPaneTabStateItem : ObservableObject
 
 	[ObservableProperty]
 	private string _displayName = string.Empty;
+
+	[ObservableProperty]
+	private string _currentUrl = string.Empty;
 }

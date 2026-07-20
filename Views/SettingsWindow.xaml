@@ -631,6 +631,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
@@ -754,7 +755,26 @@
                               IsChecked="{Binding UiStateRestoreWindowPosition, Mode=TwoWay}"
                               Margin="0,0,0,8" />
 
-                    <DataGrid Grid.Row="6"
+                    <!-- タブ復元設定は独立して保存し、両方有効な場合は初期タブ復元を優先する。 -->
+                    <TextBlock Grid.Row="6"
+                               Grid.Column="0"
+                               Text="TabRestore"
+                               VerticalAlignment="Top"
+                               Margin="0,4,8,8" />
+                    <StackPanel Grid.Row="6"
+                                Grid.Column="1"
+                                Grid.ColumnSpan="2"
+                                Margin="0,0,0,8">
+                        <CheckBox Content="前回開いていたページ URL を保存・復元する"
+                                  IsChecked="{Binding SaveAndRestoreTabUrls, Mode=TwoWay}"
+                                  ToolTip="登録 URL と同じドメイン内のページだけを settings.toml に保存して復元します"
+                                  Margin="0,0,0,8" />
+                        <CheckBox Content="起動時は常に登録済みチャットサイトへ戻す"
+                                  IsChecked="{Binding AlwaysRestoreInitialTabs, Mode=TwoWay}"
+                                  ToolTip="前回のタブ状態を使わず、ChatSites を登録順に各 1 タブずつ開きます。この設定が URL 保存・復元より優先されます" />
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="7"
                               Grid.Column="0"
                               Grid.ColumnSpan="3"
                               Style="{StaticResource SettingsDataGridStyle}"
@@ -770,15 +790,19 @@
                               Foreground="{DynamicResource MaterialDesign.Brush.Foreground}">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="SiteName"
-                                                Width="200"
+                                                Width="160"
                                                 ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
                                                 Binding="{Binding SiteName}" />
                             <DataGridTextColumn Header="Url"
-                                                Width="*"
+                                                Width="2*"
                                                 ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
                                                 Binding="{Binding Url}" />
+                            <DataGridTextColumn Header="CurrentUrl"
+                                                Width="3*"
+                                                ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
+                                                Binding="{Binding CurrentUrl}" />
                             <DataGridTextColumn Header="DisplayName"
-                                                Width="220"
+                                                Width="180"
                                                 ElementStyle="{StaticResource SettingsDataGridTextBlockStyle}"
                                                 Binding="{Binding DisplayName}" />
                         </DataGrid.Columns>
